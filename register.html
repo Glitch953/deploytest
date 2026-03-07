@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ملتقى شباب التميز - إنشاء حساب جديد</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { background-color: #0f172a; color: #e2e8f0; font-family: system-ui, -apple-system, sans-serif; }
+        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+        .floating { animation: float 4s ease-in-out infinite; }
+
+        /* Toast */
+        #pageToast {
+            position: fixed; top: 24px; left: 50%;
+            transform: translateX(-50%) translateY(-100px);
+            z-index: 9999; min-width: 300px; max-width: 420px;
+            padding: 14px 20px; border-radius: 16px;
+            background: rgba(10, 22, 40, 0.97);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.08);
+            color: white; display: flex; align-items: center; gap: 12px;
+            box-shadow: 0 24px 48px rgba(0,0,0,0.5);
+            transition: transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease;
+            opacity: 0; pointer-events: none; direction: rtl;
+        }
+        #pageToast.show { transform: translateX(-50%) translateY(0); opacity: 1; pointer-events: all; }
+        #pageToast.success { border-right: 4px solid #10b981; box-shadow: 0 24px 48px rgba(0,0,0,0.5), 0 0 20px rgba(16,185,129,0.2); }
+        #pageToast.error   { border-right: 4px solid #ef4444; box-shadow: 0 24px 48px rgba(0,0,0,0.5), 0 0 20px rgba(239,68,68,0.2); }
+        #pageToast.info    { border-right: 4px solid #38bdf8; box-shadow: 0 24px 48px rgba(0,0,0,0.5), 0 0 20px rgba(56,189,248,0.2); }
+        .ti-icon.success { color: #10b981; } .ti-icon.error { color: #ef4444; } .ti-icon.info { color: #38bdf8; }
+    </style>
+</head>
+<body>
+    <!-- Toast -->
+    <div id="pageToast">
+        <i class="fas fa-info-circle ti-icon" id="tiIcon"></i>
+        <span id="tiMsg" class="font-medium text-sm flex-1"></span>
+        <button onclick="hideToast()" class="text-gray-500 hover:text-white ml-2 transition"><i class="fas fa-times"></i></button>
+    </div>
+
+    <!-- Main Section -->
+    <section class="min-h-screen flex items-center justify-center p-6 pb-12">
+        <div class="max-w-lg w-full">
+            <!-- Logo -->
+            <div class="text-center mb-8 pt-8">
+                <div class="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-sky-500 to-teal-500 rounded-2xl flex items-center justify-center shadow-lg floating">
+                    <i class="fas fa-user-plus text-white text-2xl"></i>
+                </div>
+                <div class="text-3xl font-bold text-[#38bdf8] mb-1">EYF</div>
+                <h1 class="text-2xl font-bold text-white">إنشاء حساب جديد</h1>
+                <p class="text-gray-400 text-sm mt-2">انضم إلينا وابدأ رحلة التطوير معنا</p>
+            </div>
+
+            <!-- Card -->
+            <div class="bg-[#1e293b] rounded-3xl p-8 border border-gray-700 shadow-2xl">
+                <form id="registerForm" class="space-y-5">
+                    <!-- Names -->
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-gray-400 text-sm mb-2">الاسم الأول</label>
+                            <div class="relative">
+                                <i class="fas fa-user absolute right-3 top-3.5 text-gray-500"></i>
+                                <input type="text" id="firstName" placeholder="أحمد" required
+                                    class="w-full pr-10 px-4 py-3 bg-[#0f172a] border border-gray-700 rounded-xl text-white placeholder:text-gray-500 focus:border-[#38bdf8] focus:outline-none transition">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-gray-400 text-sm mb-2">الاسم الأخير</label>
+                            <div class="relative">
+                                <i class="fas fa-user absolute right-3 top-3.5 text-gray-500"></i>
+                                <input type="text" id="lastName" placeholder="محمد" required
+                                    class="w-full pr-10 px-4 py-3 bg-[#0f172a] border border-gray-700 rounded-xl text-white placeholder:text-gray-500 focus:border-[#38bdf8] focus:outline-none transition">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Email -->
+                    <div>
+                        <label class="block text-gray-400 text-sm mb-2">البريد الإلكتروني</label>
+                        <div class="relative">
+                            <i class="fas fa-envelope absolute right-3 top-3.5 text-gray-500"></i>
+                            <input type="email" id="email" placeholder="example@domain.com" required
+                                class="w-full pr-10 px-4 py-3 bg-[#0f172a] border border-gray-700 rounded-xl text-white placeholder:text-gray-500 focus:border-[#38bdf8] focus:outline-none transition">
+                        </div>
+                    </div>
+
+                    <!-- Phone -->
+                    <div>
+                        <label class="block text-gray-400 text-sm mb-2">رقم الهاتف</label>
+                        <div class="relative">
+                            <i class="fas fa-phone absolute right-3 top-3.5 text-gray-500"></i>
+                            <input type="tel" id="phone" placeholder="07XXXXXXXX"
+                                class="w-full pr-10 px-4 py-3 bg-[#0f172a] border border-gray-700 rounded-xl text-white placeholder:text-gray-500 focus:border-[#38bdf8] focus:outline-none transition">
+                        </div>
+                    </div>
+
+                    <!-- Passwords -->
+                    <div>
+                        <label class="block text-gray-400 text-sm mb-2">كلمة المرور</label>
+                        <div class="relative">
+                            <i class="fas fa-lock absolute right-3 top-3.5 text-gray-500"></i>
+                            <input type="password" id="password" placeholder="••••••••" required
+                                class="w-full pr-10 pl-12 py-3 bg-[#0f172a] border border-gray-700 rounded-xl text-white placeholder:text-gray-500 focus:border-[#38bdf8] focus:outline-none transition">
+                            <button type="button" onclick="togglePwd('password','pwdEye')" class="absolute left-3 top-3.5 text-gray-500 hover:text-[#38bdf8] transition px-1">
+                                <i class="fas fa-eye" id="pwdEye"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-gray-400 text-sm mb-2">تأكيد كلمة المرور</label>
+                        <div class="relative">
+                            <i class="fas fa-check-circle absolute right-3 top-3.5 text-gray-500"></i>
+                            <input type="password" id="confirmPassword" placeholder="••••••••" required
+                                class="w-full pr-10 pl-12 py-3 bg-[#0f172a] border border-gray-700 rounded-xl text-white placeholder:text-gray-500 focus:border-[#38bdf8] focus:outline-none transition">
+                            <button type="button" onclick="togglePwd('confirmPassword','confirmPwdEye')" class="absolute left-3 top-3.5 text-gray-500 hover:text-[#38bdf8] transition px-1">
+                                <i class="fas fa-eye" id="confirmPwdEye"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Terms -->
+                    <label class="flex items-start gap-3 cursor-pointer pt-2">
+                        <input type="checkbox" id="terms" required
+                            class="rounded border-gray-600 text-[#38bdf8] bg-[#0f172a] focus:ring-0 mt-1">
+                        <span class="text-gray-400 text-sm">
+                            أوافق على <a href="#" class="text-[#38bdf8] hover:underline">شروط الاستخدام</a> و <a href="#" class="text-[#38bdf8] hover:underline">سياسة الخصوصية</a>
+                        </span>
+                    </label>
+
+                    <!-- Submit -->
+                    <button type="submit" id="submitBtn"
+                        class="w-full bg-gradient-to-r from-[#0ea5e9] to-[#38bdf8] text-white py-3.5 rounded-xl font-bold text-lg hover:from-[#0284c7] hover:to-[#0ea5e9] transition-all hover:-translate-y-1 shadow-lg shadow-[#38bdf8]/20 mt-4">
+                        <i class="fas fa-user-plus ml-2"></i>إنشاء الحساب
+                    </button>
+
+                    <div class="text-center pt-4 border-t border-gray-800">
+                        <span class="text-gray-400 text-sm">لديك حساب بالفعل؟ </span>
+                        <a href="login.html" class="text-[#38bdf8] font-medium hover:underline">تسجيل الدخول</a>
+                    </div>
+                </form>
+            </div>
+
+            <p class="text-center text-gray-600 text-xs mt-8 pb-4">© 2026 ملتقى شباب التميز. جميع الحقوق محفوظة</p>
+        </div>
+    </section>
+
+    <script>
+        const apiBaseUrl = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') 
+            ? 'http://localhost:5000/api' 
+            : 'https://eyf-website-production.up.railway.app/api';
+
+        let _toastTimer;
+        function showToast(msg, type = 'info') {
+            const t = document.getElementById('pageToast');
+            const icons = { success: 'fa-check-circle', error: 'fa-exclamation-circle', info: 'fa-info-circle' };
+            document.getElementById('tiIcon').className = `fas ${icons[type]} ti-icon ${type}`;
+            document.getElementById('tiMsg').textContent = msg;
+            t.className = `show ${type}`;
+            clearTimeout(_toastTimer);
+            _toastTimer = setTimeout(hideToast, 4500);
+        }
+        function hideToast() { document.getElementById('pageToast').className = ''; }
+
+        function togglePwd(inputId, eyeId) {
+            const el = document.getElementById(inputId);
+            const eye = document.getElementById(eyeId);
+            if (el.type === 'password') { el.type = 'text'; eye.className = 'fas fa-eye-slash'; }
+            else { el.type = 'password'; eye.className = 'fas fa-eye'; }
+        }
+
+        document.getElementById('registerForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const firstName = document.getElementById('firstName').value.trim();
+            const lastName = document.getElementById('lastName').value.trim();
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            const btn = document.getElementById('submitBtn');
+
+            if (password !== confirmPassword) {
+                showToast('كلمات المرور غير متطابقة!', 'error');
+                return;
+            }
+
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i>جاري إنشاء الحساب...';
+            btn.disabled = true;
+
+            const username = `${firstName} ${lastName}`;
+
+            try {
+                const res = await fetch(`${apiBaseUrl}/auth/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, email, password })
+                });
+                const data = await res.json();
+
+                if (res.ok) {
+                    showToast('تم إنشاء الحساب بنجاح! سيتم تحويلك...', 'success');
+                    setTimeout(() => window.location.href = 'login.html', 1500);
+                } else {
+                    showToast(data.message || 'فشل إنشاء الحساب', 'error');
+                    btn.innerHTML = '<i class="fas fa-user-plus ml-2"></i>إنشاء الحساب';
+                    btn.disabled = false;
+                }
+            } catch (err) {
+                console.error(err);
+                showToast('حدث خطأ أثناء الاتصال بالخادم', 'error');
+                btn.innerHTML = '<i class="fas fa-user-plus ml-2"></i>إنشاء الحساب';
+                btn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
