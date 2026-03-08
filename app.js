@@ -1,22 +1,51 @@
 const apiBaseUrl = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:') 
     ? 'http://localhost:5000/api' 
-    : 'https://eyf-website-production.up.railway.app/api';
+    : 'https://eyf-website-backend.onrender.com/api';
+
+function getTypeArabic(type) {
+    const types = {
+        'courses': 'دورات تدريبية',
+        'events': 'فعاليات ومبادرات',
+        'competitions': 'مسابقات وجوائز',
+        'sports': 'أنشطة رياضية',
+        'other': 'أخرى'
+    };
+    return types[type] || 'فعالية';
+}
 
 document.addEventListener('DOMContentLoaded', async () => {
 
-    const currentTheme = localStorage.getItem('theme');
-    setTheme(currentTheme);
+    const savedTheme = localStorage.getItem('theme') || 'night';
+document.documentElement.className = savedTheme;
+
+    setTheme(savedTheme);
     //applyLanguage(currentLang);
     updateNavbar();
-    loadCurrentUser();  
     
-
-    const user = await loadCurrentUser();
-    if (user) {
-        checkUserSuspension(user);
+    let user = null;
+    try {
+        user = await loadCurrentUser();
+        if (user) {
+            checkUserSuspension(user);
+        }
+    } catch (e) {
+        console.error("Initialization user fetch failed:", e);
     }
     
-    loadPage('home');
+    window.onpopstate = (event) => {
+        if (event.state && event.state.page) {
+            loadPage(event.state.page, false);
+        } else {
+            loadPage('home', false);
+        }
+    };
+
+    const path = window.location.pathname.substring(1);
+    if (path && path !== 'index.html' && path !== 'home') {
+        loadPage(path);
+    } else {
+        loadPage('home');
+    }
 
 
     setTimeout(() => {
@@ -328,11 +357,24 @@ window.closeModal = function(id) {
     }
 };
 
- async function loadPage(page) {
-
+async function loadPage(page, push = true) {
+    if (!pages[page]) {
+        page = 'error404';
+    }
     document.getElementById("content").innerHTML = pages[page];
 
-    user = await loadCurrentUser();
+    if (push) {
+        const newPath = page === 'home' ? '/' : `/${page}`;
+        if (window.location.pathname !== newPath) {
+            window.history.pushState({ page: page }, '', newPath);
+        }
+    }
+    let user = null;
+    try {
+        user = await loadCurrentUser();
+    } catch (e) {
+        console.error("Failed to load user info:", e);
+    }
 
     if (page === 'home') {
         const homeButtons = document.getElementById('homeButtons');
@@ -357,6 +399,15 @@ window.closeModal = function(id) {
                 `;
             }
         }
+    }
+
+    if (page === 'adminPanel') {
+        if (!user || user.role !== 'admin') {
+            showNotification('يجب تسجيل الدخول كمسؤول للوصول لهذه الصفحة', 'error');
+            loadPage('login');
+            return;
+        }
+        updateAdminStats();
     }
 
     if (page === 'account') {
@@ -387,6 +438,10 @@ window.closeModal = function(id) {
 
     if (page === 'archive') {
         initArchivePage();
+    }
+
+    if (page === 'userSearch') {
+        if (typeof searchUsers === 'function') searchUsers('');
     }
 
     window.scrollTo({
@@ -583,6 +638,28 @@ async function handleRegister(e) {
     }
 }
 
+        async function deleteUser(userId) {
+            showConfirmModal('حذف المستخدم', 'هل أنت متأكد من حذف هذا المستخدم نهائيا؟', async () => {
+                try {
+                    const token = localStorage.getItem('token');
+                    const response = await fetch(`${apiBaseUrl}/user/${userId}`, {
+                        method: 'DELETE',
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+
+                    if (response.ok) {
+                        showNotification('تم حذف المستخدم', 'success');
+                        fetchUsers();
+                    } else {
+                        showNotification('فشل في حذف المستخدم', 'error');
+                    }
+                } catch (error) {
+                    showNotification('خطأ بالاتصال بالسيرفر', 'error');
+                }
+            }, 'delete');
+        }
         // Privacy & Followers Logic
         async function updatePrivacySettings(showFollowers) {
             const token = localStorage.getItem('token');
@@ -999,6 +1076,32 @@ async function handlePasswordChange(event) {
             return;
         }
 
+        async function updateRegistrationStatus(registrationId, status) {
+            const actionDesc = status === 'approved' ? 'قبول' : (status === 'rejected' ? 'رفض' : 'تحديث');
+            showConfirmModal(`تأكيد ال${actionDesc}`, `هل أنت متأكد من ${actionDesc} هذا الطلب؟`, async () => {
+                try {
+                    const token = localStorage.getItem('token');
+                    const res = await fetch(`${apiBaseUrl}/registrations/${registrationId}/status`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({ status })
+                    });
+
+                    if (res.ok) {
+                        showNotification('تم تحديث حالة التسجيل', 'success');
+                        showRegistrationsModal(currentEventId); // Refresh modal
+                    } else {
+                        showNotification('فشل التحديث', 'error');
+                    }
+                } catch (error) {
+                    console.error(error);
+                    showNotification('خطأ في الاتصال', 'error');
+                }
+            }, status === 'rejected' ? 'danger' : 'warning');
+        }
         const currentPassword = document.getElementById('currentPassword').value;
         const newPassword = document.getElementById('newPassword').value;
         const confirmPassword = document.getElementById('confirmPassword').value;
@@ -1606,8 +1709,8 @@ function searchUsers(query) {
                              onerror="this.src='https://ui-avatars.com/api/?name=' + encodeURIComponent('${user.username}')">
                         
                          <div class="flex-1 text-right">
-                             <h4 class="text-[var(--text-primary)] font-bold text-lg">${user.username}</h4>
-                             <p class="text-sky-400 text-xs mb-1 font-mono">${user.customId || ''}</p>
+                             <h4 class="text-[var(--text-primary)] font-bold text-lg">${escapeHTML(user.username)}</h4>
+                             <p class="text-sky-400 font-mono text-sm mt-1">رقم العضوية: ${user.customId || ''}</p>
                              <p class="text-gray-400 text-sm">${user.userType || 'عضو'}</p>
                              ${user.phone ? `<p class="text-gray-500 text-xs mt-1"><i class="fas fa-phone-alt ml-1"></i> ${user.phone}</p>` : ''}
                              <div class="flex gap-2 mt-2">
@@ -1662,7 +1765,7 @@ async function viewUserProfile(userId) {
                                  onerror="this.src='https://ui-avatars.com/api/?name=' + encodeURIComponent('${user.username}')">
                         </div>
                     </div>
-                     <h2 class="text-3xl font-bold text-[var(--text-primary)] mt-4">${user.username}</h2>
+                     <h2 class="text-3xl font-bold text-[var(--text-primary)] mt-4">${escapeHTML(user.username)}</h2>
                      <p class="text-sky-400 font-mono text-sm mt-1">رقم العضوية: ${user.customId || 'غير متوفر'}</p>
                      <div class="flex justify-center gap-4 mt-4">
                          ${user.socialLinks?.facebook ? `<a href="${user.socialLinks.facebook}" target="_blank" onclick="event.stopPropagation()" class="w-10 h-10 rounded-full bg-gray-700/50 flex items-center justify-center text-sky-400 hover:bg-sky-400 hover:text-white transition-all"><i class="fab fa-facebook-f"></i></a>` : ''}
@@ -1694,7 +1797,7 @@ async function viewUserProfile(userId) {
 
                 ${user.bio ? `
                 <div class="bg-[var(--bg-primary)] p-6 rounded-2xl mb-8 text-center border border-[var(--border-light)]">
-                    <p class="text-gray-300 italic">"${user.bio}"</p>
+                    <p class="text-gray-300 italic">"${escapeHTML(user.bio)}"</p>
                 </div>
                 ` : ''}
 
@@ -1805,85 +1908,157 @@ async function fetchNews() {
 
         const others = news
             .filter(n => !n.isFeatured)
-            .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
+            .sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt));
 
-        let carouselHtml = `
-            <div class="relative h-[400px] rounded-2xl overflow-hidden mb-12 group">
-                <div id="featured-carousel" class="h-full flex w-full transition-transform duration-700 ease-in-out">
-                    ${featured.map(item => `
-                        <div class="min-w-full h-full relative flex-shrink-0">
-                            <img src="${item.imageUrl || 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f'}" 
-                                 class="w-full h-full object-cover">
-                            <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent flex flex-col justify-end p-10">
-                                <span class="bg-sky-400/20 text-sky-400 border border-sky-400/30 text-xs px-3 py-1.5 rounded-full w-fit mb-4 backdrop-blur-sm">
-                                    ${item.category}
-                                </span>
-                                <h2 class="text-4xl font-bold text-white mb-3 line-clamp-2">${item.title}</h2>
-                                <p class="text-gray-300 max-w-2xl mb-5 line-clamp-2">${item.description}</p>
-                                <button class="btn-gradient px-8 py-3 text-base w-fit" onclick="openNews('${item._id}')">
-                                    <i class="fas fa-book-open ml-2"></i>
-                                    اقرأ التفاصيل
-                                </button>
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>
 
-                <div class="absolute bottom-5 right-1/2 translate-x-1/2 flex gap-2">
-                    ${featured.map((_, i) => `
-                        <div class="w-8 h-1.5 rounded-full bg-white/30 carousel-dot transition-all cursor-pointer hover:bg-white/50" data-index="${i}"></div>
-                    `).join('')}
-                </div>
-            </div>
+        container.innerHTML = '';
+        
+        // --- Featured News Carousel ---
+        if (featured.length > 0) {
+            const carouselWrapper = document.createElement('div');
+            carouselWrapper.className = 'relative h-[300px] md:h-[500px] rounded-2xl overflow-hidden mb-8 md:mb-12 group';
+            
+            const carouselTrack = document.createElement('div');
+            carouselTrack.id = 'featured-carousel';
+            carouselTrack.className = 'h-full flex w-full transition-transform duration-700 cubic-bezier(0.4, 0, 0.2, 1)';
+            
+            featured.forEach(item => {
+                const slide = document.createElement('div');
+                slide.className = 'min-w-full h-full relative flex-shrink-0';
+                
+                const img = document.createElement('img');
+                img.src = item.imageUrl || 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f';
+                img.className = 'w-full h-full object-cover';
+                
+                const overlay = document.createElement('div');
+                overlay.className = 'absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent flex flex-col justify-end p-10';
+                
+                const badge = document.createElement('span');
+                badge.className = 'bg-sky-400/20 text-sky-400 border border-sky-400/30 text-xs px-3 py-1.5 rounded-full w-fit mb-4 backdrop-blur-sm';
+                badge.textContent = item.category;
+                
+                const title = document.createElement('h2');
+                title.className = 'text-2xl md:text-5xl font-bold text-white mb-2 md:mb-4 line-clamp-2 leading-tight';
+                title.textContent = item.title;
+                
+                const desc = document.createElement('p');
+                desc.className = 'text-gray-300 max-w-2xl mb-4 md:mb-6 line-clamp-2 text-sm md:text-lg';
+                desc.textContent = item.description;
+                
+                const btn = document.createElement('button');
+                btn.className = 'btn-gradient px-6 py-2 md:px-8 md:py-3 text-sm md:text-base w-fit';
+                btn.innerHTML = '<i class="fas fa-book-open ml-2"></i> اقرأ التفاصيل';
+                btn.onclick = () => openNews(item._id);
+                
+                overlay.appendChild(badge);
+                overlay.appendChild(title);
+                overlay.appendChild(desc);
+                overlay.appendChild(btn);
+                
+                slide.appendChild(img);
+                slide.appendChild(overlay);
+                carouselTrack.appendChild(slide);
+            });
+            
+            const dotsWrapper = document.createElement('div');
+            dotsWrapper.className = 'absolute bottom-5 right-1/2 translate-x-1/2 flex gap-2';
+            featured.forEach((_, i) => {
+                const dot = document.createElement('div');
+                dot.className = 'w-8 h-1.5 rounded-full bg-white/30 carousel-dot transition-all cursor-pointer hover:bg-white/50';
+                dot.dataset.index = i;
+                dotsWrapper.appendChild(dot);
+            });
+            
+            carouselWrapper.appendChild(carouselTrack);
+            carouselWrapper.appendChild(dotsWrapper);
+            container.appendChild(carouselWrapper);
+        }
 
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="news-grid">
-                ${others.map(item => `
-                    <div class="elegant-card p-5 hover:border-sky-400/50 transition-all duration-300 group flex flex-col h-full">
-                        <div class="relative h-44 rounded-xl overflow-hidden mb-4 flex-shrink-0">
-                            <img src="${item.imageUrl || 'https://images.unsplash.com/photo-1556761175-b413da4baf72'}" 
-                                 class="w-full h-full object-cover group-hover:scale-110 transition duration-500">
-                            <span class="absolute top-3 right-3 bg-[var(--bg-card)] backdrop-blur-md text-sky-400 text-xs px-3 py-1.5 rounded-full border border-sky-400/30">
-                                <i class="fas fa-tag ml-1 text-[0.6rem]"></i>
-                                ${item.category}
-                            </span>
-                        </div>
+        // --- News Grid ---
+        const grid = document.createElement('div');
+        grid.id = 'news-grid';
+        grid.className = 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6';
+        
+        others.forEach(item => {
+            const card = document.createElement('div');
+            card.className = 'elegant-card p-5 hover:border-sky-400/50 transition-all duration-300 group flex flex-col h-full';
+            
+            const imgWrapper = document.createElement('div');
+            imgWrapper.className = 'relative h-44 rounded-xl overflow-hidden mb-4 flex-shrink-0';
+            
+            const img = document.createElement('img');
+            img.src = item.imageUrl || 'https://images.unsplash.com/photo-1556761175-b413da4baf72';
+            img.className = 'w-full h-full object-cover group-hover:scale-110 transition duration-500';
+            
+            const badge = document.createElement('span');
+            badge.className = 'absolute top-3 right-3 bg-[var(--bg-card)] backdrop-blur-md text-sky-400 text-xs px-3 py-1.5 rounded-full border border-sky-400/30';
+            badge.innerHTML = `<i class="fas fa-tag ml-1 text-[0.6rem]"></i> `;
+            const badgeText = document.createTextNode(item.category);
+            badge.appendChild(badgeText);
+            
+            imgWrapper.appendChild(img);
+            imgWrapper.appendChild(badge);
+            
+            const title = document.createElement('h4');
+            title.className = 'text-[var(--text-primary)] font-bold text-lg mb-2 line-clamp-1 group-hover:gradient-text transition-all';
+            title.textContent = item.title;
+            
+            const desc = document.createElement('p');
+            desc.className = 'text-gray-400 text-sm mb-4 line-clamp-2 flex-grow';
+            desc.textContent = item.description;
+            
+            const footer = document.createElement('div');
+            footer.className = 'mt-auto pt-3 border-t border-[var(--border-light)]';
+            
+            const meta = document.createElement('div');
+            meta.className = 'flex items-center justify-between mb-3';
+            
+            const dateSpan = document.createElement('span');
+            dateSpan.className = 'text-gray-500 text-xs flex items-center gap-1';
+            dateSpan.innerHTML = '<i class="far fa-calendar text-sky-400"></i> ';
+            dateSpan.appendChild(document.createTextNode(new Date(item.date || item.createdAt).toLocaleDateString('ar-EG')));
+            
+            const readBtn = document.createElement('button');
+            readBtn.className = 'text-sky-400 font-medium text-sm hover:text-teal-400 transition-all flex items-center gap-1 group/btn';
+            readBtn.innerHTML = '<span>اقرأ</span> <i class="fas fa-arrow-left text-xs group-hover/btn:-translate-x-1 transition-transform"></i>';
+            readBtn.onclick = () => openNews(item._id);
+            
+            meta.appendChild(dateSpan);
+            meta.appendChild(readBtn);
+            footer.appendChild(meta);
+            
+            card.appendChild(imgWrapper);
+            card.appendChild(title);
+            card.appendChild(desc);
+            card.appendChild(footer);
+            grid.appendChild(card);
+        });
+        
+        container.appendChild(grid);
 
-                        <h4 class="text-[var(--text-primary)] font-bold text-lg mb-2 line-clamp-1 group-hover:gradient-text transition-all">${item.title}</h4>
-                        <p class="text-gray-400 text-sm mb-4 line-clamp-2 flex-grow">${item.description}</p>
-
-                        <div class="mt-auto pt-3 border-t border-[var(--border-light)]">
-                            <div class="flex items-center justify-between mb-3">
-                                <span class="text-gray-500 text-xs flex items-center gap-1">
-                                    <i class="far fa-calendar text-sky-400"></i> 
-                                    ${new Date(item.createdAt || Date.now()).toLocaleDateString('ar-EG')}
-                                </span>
-                                <button class="text-sky-400 font-medium text-sm hover:text-teal-400 transition-all flex items-center gap-1 group/btn" onclick="openNews('${item._id}')" >
-                                    <span>اقرأ</span>
-                                    <i class="fas fa-arrow-left text-xs group-hover/btn:-translate-x-1 transition-transform"></i>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                `).join('')}
-            </div>
-        `;
-
-        container.innerHTML = carouselHtml;
 
         let index = 0;
         const carousel = document.getElementById('featured-carousel');
         const dots = document.querySelectorAll('.carousel-dot');
 
-        if (dots.length > 0) dots[0].classList.add('bg-white', 'w-12');
+        if (dots.length > 0) {
+            dots.forEach(dot => dot.classList.replace('bg-white', 'bg-white/30')); // Reset all
+            dots[0].classList.add('bg-white', 'w-12');
+            dots[0].classList.remove('bg-white/30', 'w-8');
+        }
 
         if (newsInterval) clearInterval(newsInterval);
         if (!carousel || featured.length <= 1) return;
+        
         newsInterval = setInterval(() => {
-            index = (index + 1) % featured.length;
-            if (carousel) {
-                const isLtr = document.documentElement.dir === 'ltr';
-                carousel.style.transform = isLtr ? `translateX(-${index * 100}%)` : `translateX(${index * 100}%)`;
+            if (!document.getElementById('featured-carousel')) {
+                clearInterval(newsInterval);
+                return;
             }
+            index = (index + 1) % featured.length;
+            const isLtr = document.documentElement.dir === 'ltr';
+            carousel.style.transform = isLtr ? `translateX(-${index * 100}%)` : `translateX(${index * 100}%)`;
+            
             dots.forEach((dot, i) => {
                 dot.classList.toggle('bg-white', i === index);
                 dot.classList.toggle('w-12', i === index);
@@ -1898,12 +2073,6 @@ async function fetchNews() {
 }
 
 function openNews(id) {
-    const token = localStorage.getItem('token');
-    if (!token) {
-        showNotification('يرجى تسجيل الدخول لعرض الأخبار', 'error');
-        return;
-    }
-    
     if (newsInterval) clearInterval(newsInterval);
     loadPage('singleNews');
     loadSingleNews(id);
@@ -2027,7 +2196,7 @@ async function loadSingleNews(id) {
                                          class="w-8 h-8 rounded-full object-cover border-2 border-sky-400/30">
                                     <div class="flex-1">
                                         <div class="flex items-center gap-2 mb-1">
-                                            <span class="font-bold text-[var(--text-primary)]">${comment.username}</span>
+                                            <span class="font-bold text-[var(--text-primary)]">${escapeHTML(comment.username)}</span>
                                             ${comment.userType === 'admin' ? 
                                                 '<span class="text-[10px] bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded-full">مشرف</span>' : 
                                                 comment.userType === 'vip' ? 
@@ -2035,7 +2204,7 @@ async function loadSingleNews(id) {
                                             }
                                             <span class="text-[10px] text-gray-500 mr-auto">${new Date(comment.createdAt).toLocaleDateString('ar-EG')}</span>
                                         </div>
-                                        <p class="text-gray-400 text-sm leading-relaxed">${comment.text || comment.content || ''}</p>
+                                        <p class="text-gray-400 text-sm leading-relaxed">${escapeHTML(comment.text || comment.content || '')}</p>
                                     </div>
                                     
                                     ${isOwner ? `
@@ -2078,7 +2247,16 @@ async function postComment(newsId) {
 
     const token = localStorage.getItem('token');
     if (!token) {
-        showNotification('يرجى تسجيل الدخول للتعليق', 'error');
+        showNotification('يرجى تسجيل الدخول لتتمكن من إضافة تعليق', 'error');
+        return;
+    }
+
+    // Cooldown check (30 seconds)
+    const lastCommentTime = localStorage.getItem('lastNewsCommentTime');
+    const now = Date.now();
+    if (lastCommentTime && (now - lastCommentTime) < 30000) {
+        const remaining = Math.ceil((30000 - (now - lastCommentTime)) / 1000);
+        showNotification(`يرجى الانتظار ${remaining} ثانية قبل إضافة تعليق آخر`, 'warning');
         return;
     }
 
@@ -2094,8 +2272,10 @@ async function postComment(newsId) {
 
         if (response.ok) {
             input.value = '';
+            localStorage.setItem('lastNewsCommentTime', Date.now());
             showNotification('تم إضافة التعليق بنجاح', 'success');
             loadSingleNews(newsId);
+            updateAdminStats();
         } else {
             const data = await response.json();
             showNotification(data.message || 'فشل نشر التعليق', 'error');
@@ -2107,30 +2287,29 @@ async function postComment(newsId) {
 }
 
 async function deleteComment(newsId, commentId) {
-    if (!confirm('هل أنت متأكد من حذف هذا التعليق؟')) return;
+    showConfirmModal('حذف التعليق', 'هل أنت متأكد من حذف هذا التعليق؟', async () => {
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`${apiBaseUrl}/news/${newsId}/comments/${commentId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
 
-    const token = localStorage.getItem('token');
-    if (!token) return;
-
-    try {
-        const response = await fetch(`${apiBaseUrl}/news/${newsId}/comments/${commentId}`, {
-            method: 'DELETE',
-            headers: {
-                'Authorization': `Bearer ${token}`
+            if (res.ok) {
+                showNotification('تم حذف التعليق بنجاح', 'success');
+                loadSingleNews(newsId);
+                updateAdminStats();
+            } else {
+                const data = await res.json();
+                showNotification(data.message || 'فشل حذف التعليق', 'error');
             }
-        });
-
-        if (response.ok) {
-            showNotification('تم حذف التعليق بنجاح', 'success');
-            loadSingleNews(newsId);
-        } else {
-            const data = await response.json();
-            showNotification(data.message || 'فشل حذف التعليق', 'error');
+        } catch (error) {
+            console.error('Error deleting comment:', error);
+            showNotification('خطأ في الاتصال بالسيرفر', 'error');
         }
-    } catch (error) {
-        console.error('Error deleting comment:', error);
-        showNotification('خطأ في الاتصال بالسيرفر', 'error');
-    }
+    }, 'danger');
 }
 
 let chatPollingInterval;
@@ -2179,33 +2358,38 @@ function searchChatUsers(query) {
             }
 
             const currentUser = await loadCurrentUser();
-            container.innerHTML = users
-                .filter(u => u._id !== currentUser._id)
-                .map(user => `
-                    <div class="flex items-center gap-3 p-3 hover:bg-[var(--bg-card)] cursor-pointer border-b border-[var(--border-light)] transition-all duration-300 group"
-                        onclick="openChat('${user._id}', '${user.username.replace(/'/g, "\\'")}', '${user.userType || 'عضو'}')">
+            container.innerHTML = '';
+            users.filter(u => u._id !== currentUser._id).forEach(user => {
+                const userDiv = document.createElement('div');
+                userDiv.className = 'flex items-center gap-3 p-3 hover:bg-[var(--bg-card)] cursor-pointer border-b border-[var(--border-light)] transition-all duration-300 group';
+                userDiv.onclick = () => openChat(user._id, user.username, user.userType || 'عضو');
 
-                        <div class="relative">
-                            <div class="w-10 h-10 rounded-full p-[1px] bg-gradient-to-br from-sky-500 to-teal-500">
-                                <img src="${user.profilePhoto || 'https://ui-avatars.com/api/?name=' + user.username}" 
-                                     class="w-full h-full rounded-full object-cover bg-[var(--bg-primary)]"
-                                     onerror="this.src='https://ui-avatars.com/api/?name=' + encodeURIComponent('${user.username}')">
-                            </div>
-                        </div>
+                const safeUsername = user.username.replace(/'/g, "\\'");
+                const photo = user.profilePhoto || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(user.username);
 
-                        <div class="flex-1">
-                            <div class="flex items-center gap-2 mb-0.5">
-                                <h4 class="text-[var(--text-primary)] font-bold text-sm group-hover:text-sky-400 transition-colors">${user.username}</h4>
-                                ${user.userType === 'admin' ? '<span class="text-[8px] bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded-full">مشرف</span>' : ''}
-                            </div>
-                            <p class="text-gray-500 text-xs">${user.userType || 'عضو'}</p>
-                        </div>
-
-                        <div class="opacity-0 group-hover:opacity-100 transition-opacity">
-                            <i class="fas fa-comment text-sky-400 text-sm"></i>
+                userDiv.innerHTML = `
+                    <div class="relative">
+                        <div class="w-10 h-10 rounded-full p-[1px] bg-gradient-to-br from-sky-500 to-teal-500">
+                            <img src="${photo}" 
+                                 class="w-full h-full rounded-full object-cover bg-[var(--bg-primary)]">
                         </div>
                     </div>
-                `).join('');
+
+                    <div class="flex-1">
+                        <div class="flex items-center gap-2 mb-0.5">
+                            <h4 class="text-[var(--text-primary)] font-bold text-sm group-hover:text-sky-400 transition-colors user-name-label"></h4>
+                            ${user.userType === 'admin' ? '<span class="text-[8px] bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded-full">مشرف</span>' : ''}
+                        </div>
+                        <p class="text-gray-500 text-xs">${user.userType || 'عضو'}</p>
+                    </div>
+
+                    <div class="opacity-0 group-hover:opacity-100 transition-opacity">
+                        <i class="fas fa-comment text-sky-400 text-sm"></i>
+                    </div>
+                `;
+                userDiv.querySelector('.user-name-label').textContent = user.username;
+                container.appendChild(userDiv);
+            });
         } catch (error) {
             console.error('Chat search error:', error);
             container.innerHTML = '<div class="p-4 text-center text-red-500">خطأ</div>';
@@ -2238,11 +2422,12 @@ async function loadConversations(showLoading = true) {
             return;
         }
 
-        list.innerHTML = conversations.map(c => {
+        list.innerHTML = '';
+        conversations.forEach(c => {
             const isGroup = c.type === 'group';
             const id = c.id;
             const lastMessage = c.lastMessage;
-            if (!lastMessage) return '';
+            if (!lastMessage) return;
 
             const time = lastMessage.createdAt ? new Date(lastMessage.createdAt).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }) : '';
             const username = isGroup ? c.group.name : (c.user.username || 'مستخدم');
@@ -2251,44 +2436,43 @@ async function loadConversations(showLoading = true) {
             const photo = isGroup ? 'https://ui-avatars.com/api/?background=0ea5e9&color=fff&name=' + encodeURIComponent(username) : (c.user.profilePhoto || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(username));
             const isActive = isGroup ? (chatCurrentGroupId === id) : (chatCurrentUserId === id);
 
-            return `
-                <div class="flex items-center gap-3 p-3 hover:bg-[var(--bg-card)] cursor-pointer transition-all duration-300 group ${isActive ? 'bg-gradient-to-r from-sky-500/10 to-teal-500/10 border-r-2 border-sky-400' : ''}"
-                    onclick="openChat('${id}', '${username.replace(/'/g, "\\'")}', '${isGroup ? 'مجموعة' : (c.user.userType || 'عضو')}', '${isGroup ? 'group' : 'private'}')">
-
-                    <div class="relative">
-                        <div class="w-12 h-12 rounded-full p-[2px] ${isGroup ? 'bg-gradient-to-br from-purple-500 to-pink-500' : 'bg-gradient-to-br from-sky-500 to-teal-500'}">
-                            <div class="w-full h-full rounded-full overflow-hidden bg-[var(--bg-primary)]">
-                                <img src="${photo}" class="w-full h-full object-cover" onerror="this.src='https://ui-avatars.com/api/?name=' + encodeURIComponent('${username}')">
-                            </div>
+            const convDiv = document.createElement('div');
+            convDiv.className = `flex items-center gap-3 p-3 hover:bg-[var(--bg-card)] cursor-pointer transition-all duration-300 group ${isActive ? 'bg-gradient-to-r from-sky-500/10 to-teal-500/10 border-r-2 border-sky-400' : ''}`;
+            convDiv.onclick = () => openChat(id, username, isGroup ? 'مجموعة' : (c.user.userType || 'عضو'), isGroup ? 'group' : 'private');
+            
+            convDiv.innerHTML = `
+                <div class="relative">
+                    <div class="w-12 h-12 rounded-full p-[2px] ${isGroup ? 'bg-gradient-to-br from-purple-500 to-pink-500' : 'bg-gradient-to-br from-sky-500 to-teal-500'}">
+                        <div class="w-full h-full rounded-full overflow-hidden bg-[var(--bg-primary)]">
+                            <img src="${photo}" class="w-full h-full object-cover">
                         </div>
-
-                        ${c.unreadCount > 0 ? `
-                            <div class="absolute -top-1 -right-1 min-w-[20px] h-5 bg-gradient-to-r from-sky-500 to-teal-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1.5 border-2 border-[var(--bg-card)] shadow-lg">
-                                ${c.unreadCount > 99 ? '99+' : c.unreadCount}
-                            </div>
-                        ` : ''}
-
-                        ${isGroup ? `
-                            <div class="absolute -bottom-1 -left-1 w-5 h-5 bg-gradient-to-br from-purple-500 to-pink-500 text-white rounded-full flex items-center justify-center border-2 border-[var(--bg-card)] text-[8px]">
-                                <i class="fas fa-users"></i>
-                            </div>
-                        ` : ''}
                     </div>
-
-                    <div class="flex-1 min-w-0">
-                        <div class="flex justify-between items-center mb-1">
-                            <h4 class="text-[var(--text-primary)] font-bold text-sm truncate group-hover:gradient-text transition-all">${username}</h4>
-                            <span class="text-gray-500 text-[10px]">${time}</span>
+                    ${c.unreadCount > 0 ? `
+                        <div class="absolute -top-1 -right-1 min-w-[20px] h-5 bg-gradient-to-r from-sky-500 to-teal-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1.5 border-2 border-[var(--bg-card)] shadow-lg">
+                            ${c.unreadCount > 99 ? '99+' : c.unreadCount}
                         </div>
-
-                        <p class="text-gray-400 text-xs truncate ${c.unreadCount > 0 ? 'font-bold text-[var(--text-primary)]' : ''} flex items-center gap-1">
-                            ${isFromMe ? '<span class="text-sky-400 text-[10px]"><i class="fas fa-reply ml-1"></i>أنت:</span>' : ''} 
-                            ${lastContent}
-                        </p>
+                    ` : ''}
+                    ${isGroup ? `
+                        <div class="absolute -bottom-1 -left-1 w-5 h-5 bg-gradient-to-br from-purple-500 to-pink-500 text-white rounded-full flex items-center justify-center border-2 border-[var(--bg-card)] text-[8px]">
+                            <i class="fas fa-users"></i>
+                        </div>
+                    ` : ''}
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="flex justify-between items-center mb-1">
+                        <h4 class="text-[var(--text-primary)] font-bold text-sm truncate group-hover:gradient-text transition-all conv-name"></h4>
+                        <span class="text-gray-500 text-[10px]">${time}</span>
                     </div>
+                    <p class="text-gray-400 text-xs truncate ${c.unreadCount > 0 ? 'font-bold text-[var(--text-primary)]' : ''} flex items-center gap-1">
+                        ${isFromMe ? '<span class="text-sky-400 text-[10px]"><i class="fas fa-reply ml-1"></i>أنت:</span>' : ''} 
+                        <span class="last-msg-content"></span>
+                    </p>
                 </div>
             `;
-        }).join('');
+            convDiv.querySelector('.conv-name').textContent = username;
+            convDiv.querySelector('.last-msg-content').textContent = lastContent;
+            list.appendChild(convDiv);
+        });
     } catch (error) {
         console.error('Load conversations error:', error);
     }
@@ -2341,23 +2525,37 @@ async function loadMessages(id, scrollToBottom = false) {
         const currentUser = await loadCurrentUser();
         if (!currentUser) return;
 
-        const html = messages.map(msg => {
-            const senderObj = msg.sender || {};
-            const isMe = (senderObj._id || senderObj) === (currentUser._id || currentUser.id);
-            const senderName = isMe ? 'أنت' : (senderObj.username || 'عضو');
+        container.innerHTML = '';
+        if (messages.length === 0) {
+            container.innerHTML = '<div class="text-center text-gray-500 mt-10">ابدأ المحادثة الآن!</div>';
+        } else {
+            messages.forEach(msg => {
+                const senderObj = msg.sender || {};
+                const isMe = (senderObj._id || senderObj) === (currentUser._id || currentUser.id);
+                const senderName = isMe ? 'أنت' : (senderObj.username || 'عضو');
 
-            return `
-                <div class="flex ${isMe ? 'justify-end' : 'justify-start'} mb-3">
+                const msgDiv = document.createElement('div');
+                msgDiv.className = `flex ${isMe ? 'justify-end' : 'justify-start'} mb-3`;
+                
+                msgDiv.innerHTML = `
                     <div class="max-w-[70%] ${isMe 
                         ? 'bg-gradient-to-r from-sky-500/90 to-teal-500/90 text-white rounded-br-none' 
                         : 'bg-[var(--bg-primary)] border border-[var(--border-light)] text-[var(--text-primary)] rounded-bl-none'} 
                         px-4 py-2.5 rounded-2xl shadow-sm relative group backdrop-blur-sm">
 
                         ${chatCurrentType === 'group' && !isMe ? `
-                            <p class="text-[10px] font-bold text-sky-400 mb-1">${senderName}</p>
+                            <p class="text-[10px] font-bold text-sky-400 mb-1 sender-name-label"></p>
                         ` : ''}
 
-                        <p class="text-sm leading-relaxed break-words">${msg.content}</p>
+                        ${msg.imageUrl ? `
+                            <div class="mb-2 overflow-hidden rounded-lg border border-white/10">
+                                <img src="${msg.imageUrl}" alt="صورة" 
+                                     class="max-w-full h-auto cursor-pointer hover:opacity-90 transition-opacity" 
+                                     onclick="window.open('${msg.imageUrl}', '_blank')">
+                            </div>
+                        ` : ''}
+
+                        ${msg.content ? `<p class="text-sm leading-relaxed break-words msg-content-p"></p>` : ''}
 
                         <div class="flex items-center justify-end gap-1 mt-1 ${isMe ? 'text-white/70' : 'text-gray-500'} text-[10px]">
                             <span>${new Date(msg.createdAt || Date.now()).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</span>
@@ -2368,11 +2566,16 @@ async function loadMessages(id, scrollToBottom = false) {
                             ) : ''}
                         </div>
                     </div>
-                </div>
-            `;
-        }).join('');
-
-        container.innerHTML = html.length ? html : '<div class="text-center text-gray-500 mt-10">ابدأ المحادثة الآن!</div>';
+                `;
+                if (msgDiv.querySelector('.sender-name-label')) {
+                    msgDiv.querySelector('.sender-name-label').textContent = senderName;
+                }
+                if (msgDiv.querySelector('.msg-content-p')) {
+                    msgDiv.querySelector('.msg-content-p').textContent = msg.content;
+                }
+                container.appendChild(msgDiv);
+            });
+        }
 
         if (scrollToBottom) {
             container.scrollTop = container.scrollHeight;
@@ -2382,22 +2585,47 @@ async function loadMessages(id, scrollToBottom = false) {
     }
 }
 
+let selectedChatImageFile = null;
+
+function previewChatImage(input) {
+    if (input.files && input.files[0]) {
+        selectedChatImageFile = input.files[0];
+        document.getElementById('chatImageName').innerText = selectedChatImageFile.name;
+        document.getElementById('chatImagePreview').classList.remove('hidden');
+        document.getElementById('chatImagePreview').classList.add('flex');
+        document.getElementById('chatSendBtn').disabled = false;
+    }
+}
+
+function clearChatImage() {
+    selectedChatImageFile = null;
+    document.getElementById('chatImageInput').value = '';
+    document.getElementById('chatImagePreview').classList.add('hidden');
+    document.getElementById('chatImagePreview').classList.remove('flex');
+    const input = document.getElementById('chatInput');
+    if (!input.value.trim()) {
+        document.getElementById('chatSendBtn').disabled = true;
+    }
+}
+
 async function sendChatMessage() {
     const input = document.getElementById('chatInput');
     const content = input.value.trim();
     const currentId = chatCurrentType === 'group' ? chatCurrentGroupId : chatCurrentUserId;
-    if (!content || !currentId) return;
+    
+    // Allow sending if there's either text OR an image
+    if ((!content && !selectedChatImageFile) || !currentId) return;
 
     input.value = '';
-    input.focus();
-
+    
     const container = document.getElementById('chatMessages');
     const tempId = Date.now();
 
     const tempMsg = `
         <div class="flex justify-end mb-3" id="temp-${tempId}">
             <div class="max-w-[70%] bg-gradient-to-r from-sky-500/50 to-teal-500/50 text-white rounded-br-none px-4 py-2.5 rounded-2xl shadow-sm backdrop-blur-sm animate-pulse">
-                <p class="text-sm leading-relaxed break-words">${content}</p>
+                ${selectedChatImageFile ? '<div class="mb-2 text-[10px]"><i class="fas fa-image"></i> إرسال صورة...</div>' : ''}
+                ${content ? `<p class="text-sm leading-relaxed break-words">${content}</p>` : ''}
                 <div class="flex items-center justify-end gap-1 mt-1 text-white/50 text-[10px]">
                     <i class="fas fa-circle-notch fa-spin text-[8px]"></i>
                     <span>جاري الإرسال</span>
@@ -2414,17 +2642,25 @@ async function sendChatMessage() {
             ? `${apiBaseUrl}/chat/send-group`
             : `${apiBaseUrl}/chat/send`;
 
-        const body = chatCurrentType === 'group'
-            ? { groupId: currentId, content }
-            : { receiverId: currentId, content };
+        const formData = new FormData();
+        
+        if (chatCurrentType === 'group') {
+            formData.append('groupId', currentId);
+        } else {
+            formData.append('receiverId', currentId);
+        }
+        
+        if (content) formData.append('content', content);
+        if (selectedChatImageFile) formData.append('image', selectedChatImageFile);
 
         const res = await fetch(url, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify(body)
+            headers: { 'Authorization': `Bearer ${token}` }, // Do not set Content-Type here, let browser set boundary for FormData
+            body: formData
         });
 
         if (res.ok) {
+            clearChatImage();
             loadMessages(currentId, true);
             loadConversations(false);
         } else {
@@ -3576,6 +3812,10 @@ function showDetailsModal(item) {
 
 async function loadCertificates() {
     const container = document.querySelector("#certificates-section .grid.grid-cols-1");
+    // Also support the ID for the account page version
+    const accountContainer = document.getElementById('user-certificates-container');
+    const targetContainer = container || accountContainer;
+    
     const stats = {
         completed: 0,
         inProgress: 0,
@@ -3583,6 +3823,10 @@ async function loadCertificates() {
     };
     
     try {
+        if (!targetContainer) return;
+        
+        targetContainer.innerHTML = '<div class="col-span-1 md:col-span-2 py-8 text-center text-gray-400"><i class="fas fa-spinner fa-spin text-2xl text-accent mb-2"></i> جاري التحميل... </div>';
+        
         const res = await fetch(`${apiBaseUrl}/certificates/my-certificates`, {
             headers: {
                 'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -3591,80 +3835,114 @@ async function loadCertificates() {
 
         if (!res.ok) throw new Error('فشل في تحميل الشهادات');
 
-        if (res.ok){
-            console.log('loaded', res);
-        }
-
         const certificates = await res.json();
-        container.innerHTML = ''; // نظف الحاوية
+        targetContainer.innerHTML = ''; 
 
         certificates.forEach(cert => {
             stats.total++;
 
-            // حدد حالة الشهادة
             let statusLabel = 'مستلمة';
             let statusColor = 'green';
-            let progressBar = '';
+            let isProgress = false;
             if(cert.description?.toLowerCase().includes('قيد الإنجاز') || cert.progress < 100) {
                 statusLabel = 'قيد الإنجاز';
                 statusColor = 'yellow';
-                progressBar = `
-                    <div class="mb-4">
-                        <div class="h-1.5 bg-[var(--bg-secondary)] rounded-full overflow-hidden">
-                            <div class="w-[${cert.progress || 60}%] h-full bg-gradient-to-r from-yellow-500 to-orange-500 rounded-full"></div>
-                        </div>
-                    </div>
-                `;
                 stats.inProgress++;
+                isProgress = true;
             } else {
                 stats.completed++;
             }
 
-            container.innerHTML += `
-                <div class="bg-[var(--bg-primary)] rounded-xl p-6 border border-[var(--border-light)] hover:border-${statusColor}-400/30 transition-all duration-300 group">
-                    <div class="flex justify-between items-start mb-4">
-                        <div class="w-16 h-16 bg-gradient-to-br from-${statusColor}-500 to-teal-500 rounded-2xl flex items-center justify-center">
-                            <i class="fas fa-certificate text-white text-2xl"></i>
-                        </div>
-                        <span class="bg-${statusColor}-500/20 text-${statusColor}-400 text-xs px-3 py-1 rounded-full border border-${statusColor}-500/30">
-                            ${statusLabel}
-                        </span>
-                    </div>
-                    <h4 class="text-[var(--text-primary)] font-bold text-lg mb-2">${cert.title}</h4>
-                    <p class="text-gray-400 text-sm mb-4">${cert.description || 'بتقدير: ممتاز'}</p>
-                    <div class="flex items-center justify-between mb-4">
-                        <div class="flex items-center gap-2">
-                            <i class="fas fa-calendar text-${statusColor}-400 text-xs"></i>
-                            <span class="text-gray-500 text-sm">${new Date(cert.dateIssued).toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <i class="fas fa-hashtag text-teal-400 text-xs"></i>
-                            <span class="text-gray-500 text-sm">EYF-${cert._id.slice(0,6)}</span>
-                        </div>
-                    </div>
-                    ${progressBar}
-                    <div class="flex gap-3">
-                        <button class="flex-1 btn-gradient py-2 text-sm" onclick="window.open('${cert.certificateUrl}', '_blank')">
-                            <i class="fas fa-eye ml-1"></i>
-                            عرض
-                        </button>
-                        <button class="flex-1 btn-outline py-2 text-sm" onclick="downloadCertificate('${cert.certificateUrl}')">
-                            <i class="fas fa-download"></i>
-                        </button>
-                    </div>
-                </div>
-            `;
+            const card = document.createElement('div');
+            card.className = `bg-[var(--bg-primary)] rounded-xl p-6 border border-[var(--border-light)] hover:border-${statusColor}-400/30 transition-all duration-300 group`;
+            
+            const header = document.createElement('div');
+            header.className = 'flex justify-between items-start mb-4';
+            
+            const iconBox = document.createElement('div');
+            iconBox.className = `w-16 h-16 bg-gradient-to-br from-${statusColor}-500 to-teal-500 rounded-2xl flex items-center justify-center`;
+            iconBox.innerHTML = '<i class="fas fa-certificate text-white text-2xl"></i>';
+            
+            const badge = document.createElement('span');
+            badge.className = `bg-${statusColor}-500/20 text-${statusColor}-400 text-xs px-3 py-1 rounded-full border border-${statusColor}-500/30`;
+            badge.textContent = statusLabel;
+            
+            header.appendChild(iconBox);
+            header.appendChild(badge);
+            
+            const title = document.createElement('h4');
+            title.className = 'text-[var(--text-primary)] font-bold text-lg mb-2';
+            title.textContent = cert.title;
+            
+            const desc = document.createElement('p');
+            desc.className = 'text-gray-400 text-sm mb-4';
+            desc.textContent = cert.description || 'بتقدير: ممتاز';
+            
+            const meta = document.createElement('div');
+            meta.className = 'flex items-center justify-between mb-4';
+            
+            const dateBox = document.createElement('div');
+            dateBox.className = 'flex items-center gap-2';
+            dateBox.innerHTML = `<i class="fas fa-calendar text-${statusColor}-400 text-xs"></i> `;
+            dateBox.appendChild(document.createTextNode(new Date(cert.dateIssued).toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' })));
+            
+            const hashBox = document.createElement('div');
+            hashBox.className = 'flex items-center gap-2';
+            hashBox.innerHTML = '<i class="fas fa-hashtag text-teal-400 text-xs"></i> ';
+            hashBox.appendChild(document.createTextNode(`EYF-${cert._id.slice(0,6)}`));
+            
+            meta.appendChild(dateBox);
+            meta.appendChild(hashBox);
+            
+            card.appendChild(header);
+            card.appendChild(title);
+            card.appendChild(desc);
+            card.appendChild(meta);
+            
+            if (isProgress) {
+                const progressWrapper = document.createElement('div');
+                progressWrapper.className = 'mb-4';
+                const progressBg = document.createElement('div');
+                progressBg.className = 'h-1.5 bg-[var(--bg-secondary)] rounded-full overflow-hidden';
+                const progressBar = document.createElement('div');
+                progressBar.className = 'h-full bg-gradient-to-r from-yellow-500 to-orange-500 rounded-full';
+                progressBar.style.width = `${cert.progress || 60}%`;
+                progressBg.appendChild(progressBar);
+                progressWrapper.appendChild(progressBg);
+                card.appendChild(progressWrapper);
+            }
+            
+            const actions = document.createElement('div');
+            actions.className = 'flex gap-3';
+            
+            const viewBtn = document.createElement('button');
+            viewBtn.className = 'flex-1 btn-gradient py-2 text-sm';
+            viewBtn.innerHTML = '<i class="fas fa-eye ml-1"></i> عرض';
+            viewBtn.onclick = () => window.open(cert.certificateUrl, '_blank');
+            
+            const dlBtn = document.createElement('button');
+            dlBtn.className = 'flex-1 btn-outline py-2 text-sm';
+            dlBtn.innerHTML = '<i class="fas fa-download"></i>';
+            dlBtn.onclick = () => downloadCertificate(cert.certificateUrl);
+            
+            actions.appendChild(viewBtn);
+            actions.appendChild(dlBtn);
+            card.appendChild(actions);
+            
+            targetContainer.appendChild(card);
         });
 
-        // تحديث الإحصائيات
+        // تحديث الإحصائيات إذا كانت موجودة
         const statCards = document.querySelectorAll("#certificates-section .stat-card");
-        statCards[0].querySelector('div').textContent = stats.completed;
-        statCards[1].querySelector('div').textContent = stats.inProgress;
-        statCards[2].querySelector('div').textContent = stats.total;
+        if (statCards.length >= 3) {
+            statCards[0].querySelector('div').textContent = stats.completed;
+            statCards[1].querySelector('div').textContent = stats.inProgress;
+            statCards[2].querySelector('div').textContent = stats.total;
+        }
 
     } catch (err) {
         console.error(err);
-        container.innerHTML = `<p class="text-center text-gray-500 py-4">${err.message}</p>`;
+        targetContainer.innerHTML = `<p class="text-center text-gray-500 py-4">${err.message}</p>`;
     }
 }
 
@@ -3676,6 +3954,54 @@ function downloadCertificate(url) {
     document.body.appendChild(a);
     a.click();
     a.remove();
+}
+
+async function updateAdminStats() {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    try {
+        // Fetch Users
+        const userRes = await fetch(`${apiBaseUrl}/user`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const users = await userRes.json();
+        const usersTotal = Array.isArray(users) ? users.length : 0;
+        
+        // Fetch Events & Count by Type
+        const eventRes = await fetch(`${apiBaseUrl}/events`);
+        const events = await eventRes.json();
+        const coursesCount = events.filter(e => e.type === 'courses').length;
+        const eventsCount = events.filter(e => e.type === 'events' || e.type === 'workshops' || e.type === 'upcoming').length;
+
+        // Fetch News
+        const newsRes = await fetch(`${apiBaseUrl}/news`);
+        const news = await newsRes.json();
+        const newsTotal = Array.isArray(news) ? news.length : 0;
+
+        // Update DOM
+        const els = {
+            'admin-total-users': usersTotal,
+            'admin-total-courses': coursesCount,
+            'admin-total-events': eventsCount,
+            'admin-total-news': newsTotal
+        };
+
+        for (const [id, count] of Object.entries(els)) {
+            const el = document.getElementById(id);
+            if (el) {
+                el.textContent = count.toLocaleString('ar-EG');
+                // Update progress bar width based on some arbitrary max for visual effect
+                const bar = el.parentElement.querySelector('.h-1.5 div');
+                if (bar) {
+                    const percentage = Math.min(100, (count / (count > 50 ? 200 : 50)) * 100);
+                    bar.style.width = `${percentage}%`;
+                }
+            }
+        }
+    } catch (err) {
+        console.error('Error updating admin stats:', err);
+    }
 }
 
 async function showAdminSection(sectionId, btn) {
@@ -3713,6 +4039,8 @@ async function showAdminSection(sectionId, btn) {
         fetchBannedUsers();
     } else if (sectionId === 'certs') {
         fetchAdminCertificates();
+    } else if (sectionId === 'news') {
+        loadNewsAdmin();
     }
 }
 
@@ -3751,23 +4079,29 @@ async function fetchLogs() {
             return;
         }
 
-        tableBody.innerHTML = logs.map(log => {
+        tableBody.innerHTML = '';
+        logs.forEach(log => {
             const dateStr = log.createdAt ? new Date(log.createdAt).toLocaleString('ar-JO') : '-';
-            return `
-            <tr class="hover:bg-white/5 transition-colors">
-                <td class="px-6 py-4 text-gray-300 text-sm">${dateStr}</td>
+            const row = document.createElement('tr');
+            row.className = 'hover:bg-white/5 transition-colors border-b border-white/5';
+            
+            row.innerHTML = `
+                <td class="px-6 py-4 text-gray-300 text-[10px] whitespace-nowrap">${dateStr}</td>
                 <td class="px-6 py-4">
-                    <div class="font-medium text-white">${log.userId?.username || log.userId?.email || 'مجهول'}</div>
+                    <div class="font-bold text-white text-sm log-username"></div>
                 </td>
                 <td class="px-6 py-4">
-                    <span class="bg-accent/20 text-accent px-3 py-1 rounded-full text-xs">
+                    <span class="bg-accent/20 text-accent px-3 py-1 rounded-full text-[10px] font-bold whitespace-nowrap">
                         ${actionLabels[log.action] || log.action || '-'}
                     </span>
                 </td>
-                <td class="px-6 py-4 text-gray-400 text-sm">${log.details || '-'}</td>
-                <td class="px-6 py-4 text-gray-500 text-xs">${log.ip || '-'}</td>
-            </tr>`;
-        }).join('');
+                <td class="px-6 py-4 text-gray-400 text-xs min-w-[200px] log-details"></td>
+                <td class="px-6 py-4 text-gray-500 text-[10px] tabular-nums">${log.ip || '-'}</td>
+            `;
+            row.querySelector('.log-username').textContent = log.userId?.username || log.userId?.email || 'مجهول';
+            row.querySelector('.log-details').textContent = log.details || '-';
+            tableBody.appendChild(row);
+        });
 
     } catch (err) {
         console.error('Error fetching logs:', err);
@@ -3973,22 +4307,29 @@ async function fetchPendingUsers() {
                 tableBody.innerHTML = '<tr><td colspan="4" class="px-6 py-12 text-center text-gray-500">لا يوجد طلبات تفعيل حالياً</td></tr>';
                 return;
             }
-            tableBody.innerHTML = pendingOnes.map(user => `
-                <tr class="hover:bg-white/5 transition-colors">
+            tableBody.innerHTML = '';
+            pendingOnes.forEach(user => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-white/5 transition-colors border-b border-white/5';
+                row.innerHTML = `
                     <td class="px-6 py-4">
-                        <div class="font-bold text-white">${user.username}</div>
+                        <div class="font-bold text-white user-name"></div>
                         <div class="text-xs text-gray-500">${user.email}</div>
                     </td>
-                    <td class="px-6 py-4 text-sm text-gray-300">${new Date(user.createdAt).toLocaleDateString('ar-JO')}</td>
+                    <td class="px-6 py-4 text-sm text-gray-300 whitespace-nowrap">${new Date(user.createdAt).toLocaleDateString('ar-JO')}</td>
                     <td class="px-6 py-4">
-                        <span class="bg-yellow-500/20 text-yellow-500 px-3 py-1 rounded-full text-xs font-bold">قيد الانتظار</span>
+                        <span class="bg-yellow-500/20 text-yellow-500 px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap">قيد الانتظار</span>
                     </td>
                     <td class="px-6 py-4 flex gap-2 justify-center">
-                        <button onclick="approveUser('${user._id}')" class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all">تفعيل</button>
-                        <button onclick="rejectUser('${user._id}')" class="bg-red-600/20 hover:bg-red-600 text-red-500 hover:text-white px-3 py-1.5 rounded-lg text-xs font-bold border border-red-600/30 transition-all">رفض</button>
+                        <button class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all approve-btn">تفعيل</button>
+                        <button class="bg-red-600/20 hover:bg-red-600 text-red-500 hover:text-white px-3 py-1.5 rounded-lg text-xs font-bold border border-red-600/30 transition-all reject-btn">رفض</button>
                     </td>
-                </tr>
-            `).join('');
+                `;
+                row.querySelector('.user-name').textContent = user.username;
+                row.querySelector('.approve-btn').onclick = () => approveUser(user._id);
+                row.querySelector('.reject-btn').onclick = () => rejectUser(user._id);
+                tableBody.appendChild(row);
+            });
         }
     } catch (e) {
         console.error(e);
@@ -4007,6 +4348,7 @@ async function approveUser(userId) {
             showNotification('تم تفعيل الحساب بنجاح', 'success');
             fetchPendingUsers();
             if (typeof fetchUsers === 'function') fetchUsers();
+            updateAdminStats();
         } else {
             const data = await res.json();
             showNotification(data.message || 'فشل تفعيل الحساب', 'error');
@@ -4017,23 +4359,31 @@ async function approveUser(userId) {
 }
 
 async function rejectUser(userId) {
-    if (!confirm('هل أنت متأكد من رفض هذا الطلب؟')) return;
-    const token = localStorage.getItem('token');
-    try {
-        const res = await fetch(`${apiBaseUrl}/user/${userId}/reject`, {
-            method: 'PUT',
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (res.ok) {
-            showNotification('تم رفض الطلب', 'info');
-            fetchPendingUsers();
-        } else {
-            const data = await res.json();
-            showNotification(data.message || 'فشل رفض الطلب', 'error');
-        }
-    } catch (e) {
-        showNotification('خطأ في الاتصال', 'error');
-    }
+    showConfirmModal(
+        'تأكيد الرفض',
+        'هل أنت متأكد من رفض هذا الطلب؟',
+        async () => {
+            const token = localStorage.getItem('token');
+            try {
+                const res = await fetch(`${apiBaseUrl}/user/${userId}/reject`, {
+                    method: 'PUT',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    showNotification('تم رفض الطلب', 'info');
+                    fetchPendingUsers();
+                    updateAdminStats();
+                } else {
+                    const data = await res.json();
+                    showNotification(data.message || 'فشل رفض الطلب', 'error');
+                }
+            } catch (e) {
+                showNotification('خطأ في الاتصال', 'error');
+            }
+        },
+        'danger',
+        'تأكيد الرفض'
+    );
 }
 
 async function fetchBannedUsers() {
@@ -4054,19 +4404,25 @@ async function fetchBannedUsers() {
                 list.innerHTML = '<div class="text-center text-gray-500 py-12 bg-white/5 rounded-2xl border border-white/10">لا يوجد مستخدمين محظورين</div>';
                 return;
             }
-            list.innerHTML = bannedOnes.map(user => `
-                <div class="bg-red-500/5 border border-red-500/20 p-5 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+            list.innerHTML = '';
+            bannedOnes.forEach(user => {
+                const item = document.createElement('div');
+                item.className = 'bg-red-500/5 border border-red-500/20 p-5 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4';
+                item.innerHTML = `
                     <div class="flex items-center gap-4">
                         <div class="w-12 h-12 bg-red-600 rounded-full flex items-center justify-center text-white"><i class="fas fa-user-slash"></i></div>
                         <div>
-                            <h5 class="text-white font-bold">${user.username}</h5>
-                            <p class="text-red-400 text-xs">السبب: ${user.banReason || 'غير محدد'}</p>
-                            <p class="text-red-400 text-xs">محظور لغاية: ${new Date(user.suspendedUntil).toLocaleDateString('ar-JO')}</p>
+                            <h5 class="text-white font-bold banned-user-name"></h5>
+                            <p class="text-red-400 text-xs ban-reason-text"></p>
+                            <p class="text-red-400 text-[10px] opacity-70">محظور لغاية: ${new Date(user.suspendedUntil).toLocaleDateString('ar-JO')}</p>
                         </div>
                     </div>
                     <button onclick="unsuspendUser('${user._id}')" class="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-xl text-sm font-bold transition-all">رفع الحظر</button>
-                </div>
-            `).join('');
+                `;
+                item.querySelector('.banned-user-name').textContent = user.username;
+                item.querySelector('.ban-reason-text').textContent = `السبب: ${user.banReason || 'غير محدد'}`;
+                list.appendChild(item);
+            });
         }
     } catch (e) {
         list.innerHTML = '<div class="text-center text-red-500 py-8">خطأ في تحميل البيانات</div>';
@@ -4084,6 +4440,7 @@ async function unsuspendUser(userId) {
             showNotification('تم رفع الحظر بنجاح', 'success');
             fetchBannedUsers();
             if (typeof fetchUsers === 'function') fetchUsers();
+            updateAdminStats();
         } else {
             showNotification('فشل رفع الحظر', 'error');
         }
@@ -4174,57 +4531,60 @@ async function loadEvents() {
                 return;
             }
 
-            container.innerHTML = events.map(event => `
-        <div class="bg-primary p-4 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-4 ${!event.status ? 'opacity-80' : ''}">
-            <div class="flex items-start gap-4">
-                <div class="w-16 h-16 bg-gradient-to-r ${event.bgColor || 'from-accent to-[#0b446b]'} rounded-xl flex items-center justify-center">
-                    <i class="fas ${event.icon || 'fa-code'} text-white text-2xl"></i>
-                </div>
-                <div class="flex-1">
-                    <h5 class="text-white font-bold mb-1">${event.title}</h5>
-                    <div class="flex flex-wrap gap-3 text-xs">
-                        <span class="text-gray-400"><i class="fas fa-calendar ml-1 text-accent"></i> ${event.date || 'غير محدد'}</span>
-                        <span class="text-gray-400"><i class="fas fa-users ml-1 text-accent"></i> ${event.seats} مقعد</span>
-                        <span class="text-gray-400"><i class="fas fa-user ml-1 text-accent"></i> ${event.instructor}</span>
-                        <span class="text-gray-400"><i class="fas fa-clock ml-1 text-accent"></i> ${event.duration}</span>
+            container.innerHTML = '';
+            events.forEach(event => {
+                const eventDiv = document.createElement('div');
+                eventDiv.className = `bg-primary p-4 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-4 ${!event.status ? 'opacity-80' : ''}`;
+                
+                eventDiv.innerHTML = `
+                    <div class="flex items-start gap-4">
+                        <div class="w-16 h-16 bg-gradient-to-r ${event.bgColor || 'from-accent to-[#0b446b]'} rounded-xl flex items-center justify-center">
+                            <i class="fas ${event.icon || 'fa-code'} text-white text-2xl"></i>
+                        </div>
+                        <div class="flex-1">
+                            <h5 class="text-white font-bold mb-1 event-title-h"></h5>
+                            <div class="flex flex-wrap gap-3 text-xs">
+                                <span class="text-gray-400"><i class="fas fa-calendar ml-1 text-accent"></i> ${event.date || 'غير محدد'}</span>
+                                <span class="text-gray-400"><i class="fas fa-users ml-1 text-accent"></i> ${event.seats} مقعد</span>
+                                <span class="text-gray-400 font-medium whitespace-nowrap"><i class="fas fa-user ml-1 text-accent"></i> <span class="instructor-span"></span></span>
+                                <span class="text-gray-400"><i class="fas fa-clock ml-1 text-accent"></i> ${event.duration}</span>
+                            </div>
+                            <div class="flex gap-2 mt-2">
+                                <span class="inline-block ${event.status ? 'bg-green-500/20 text-green-400 border-green-500/30' : 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'} text-xs px-2 py-1 rounded-full border">
+                                    <i class="fas ${event.status ? 'fa-check-circle' : 'fa-clock'} ml-1"></i> 
+                                    ${event.status ? 'منشور' : 'مسودة'}
+                                </span>
+                                <span class="inline-block bg-accent/20 text-accent text-xs px-2 py-1 rounded-full border border-accent/30">
+                                    <i class="fas fa-tag ml-1"></i>
+                                    ${getTypeArabic(event.type)}
+                                </span>
+                            </div>
+                        </div>
                     </div>
-                    <div class="flex gap-2 mt-2">
-                        <span class="inline-block ${event.status ? 'bg-green-500/20 text-green-400 border-green-500/30' : 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'} text-xs px-2 py-1 rounded-full border">
-                            <i class="fas ${event.status ? 'fa-check-circle' : 'fa-clock'} ml-1"></i> 
-                            ${event.status ? 'منشور' : 'مسودة'}
-                        </span>
-                        <span class="inline-block bg-accent/20 text-accent text-xs px-2 py-1 rounded-full border border-accent/30">
-                            <i class="fas fa-tag ml-1"></i>
-                            ${getTypeArabic(event.type)}
-                        </span>
+                    <div class="flex gap-2 mr-0 md:mr-4">
+                        <button class="bg-blue-500/20 text-blue-400 px-3 py-2 rounded-lg text-sm hover:bg-blue-500 hover:text-white transition group relative reg-modal-btn" title="عرض المسجلين">
+                            <i class="fas fa-users"></i>
+                            <span class="mr-1 hidden md:inline">المسجلين</span>
+                        </button>
+                        <button class="bg-accent text-white px-3 py-2 rounded-lg text-sm hover:bg-accent-hover transition edit-btn" title="تعديل">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="${event.status ? 'bg-green-500/20 text-green-400 hover:bg-green-500' : 'bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500'} px-3 py-2 rounded-lg text-sm hover:text-white transition status-btn" title="${event.status ? 'إلغاء النشر' : 'نشر'}">
+                            <i class="fas ${event.status ? 'fa-eye' : 'fa-eye-slash'}"></i>
+                        </button>
+                        <button class="border border-red-500/30 text-red-400 px-3 py-2 rounded-lg text-sm hover:bg-red-500 hover:text-white transition delete-btn" title="حذف">
+                            <i class="fas fa-trash"></i>
+                        </button>
                     </div>
-                </div>
-            </div>
-            <div class="flex gap-2 mr-0 md:mr-4">
-                <button onclick="showRegistrationsModal('${event._id}', '${event.title}', ${event.seats})" 
-                    class="bg-blue-500/20 text-blue-400 px-3 py-2 rounded-lg text-sm hover:bg-blue-500 hover:text-white transition group relative"
-                    title="عرض المسجلين">
-                    <i class="fas fa-users"></i>
-                    <span class="mr-1 hidden md:inline">المسجلين</span>
-                </button>
-                <button onclick="editEvent('${event._id}')" 
-                    class="bg-accent text-white px-3 py-2 rounded-lg text-sm hover:bg-accent-hover transition"
-                    title="تعديل">
-                    <i class="fas fa-edit"></i>
-                </button>
-                <button onclick="updateEventStatus('${event._id}', ${!event.status})" 
-                    class="${event.status ? 'bg-green-500/20 text-green-400 hover:bg-green-500' : 'bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500'} px-3 py-2 rounded-lg text-sm hover:text-white transition"
-                    title="${event.status ? 'إلغاء النشر' : 'نشر'}">
-                    <i class="fas ${event.status ? 'fa-eye' : 'fa-eye-slash'}"></i>
-                </button>
-                <button onclick="deleteEvent('${event._id}')" 
-                    class="border border-red-500/30 text-red-400 px-3 py-2 rounded-lg text-sm hover:bg-red-500 hover:text-white transition"
-                    title="حذف">
-                    <i class="fas fa-trash"></i>
-                </button>
-            </div>
-        </div>
-    `).join('');
+                `;
+                eventDiv.querySelector('.event-title-h').textContent = event.title;
+                eventDiv.querySelector('.instructor-span').textContent = event.instructor;
+                eventDiv.querySelector('.reg-modal-btn').onclick = () => showRegistrationsModal(event._id, event.title, event.seats);
+                eventDiv.querySelector('.edit-btn').onclick = () => editEvent(event._id);
+                eventDiv.querySelector('.status-btn').onclick = () => updateEventStatus(event._id, !event.status);
+                eventDiv.querySelector('.delete-btn').onclick = () => deleteEvent(event._id);
+                container.appendChild(eventDiv);
+            });
         }
         // ==================== 3. دوال المسجلين ====================
         async function showRegistrationsModal(eventId, eventTitle, totalSeats) {
@@ -4360,52 +4720,59 @@ async function loadEvents() {
                 return;
             }
 
-            container.innerHTML = registrations.map(reg => `
-        <div class="bg-primary p-4 rounded-lg flex flex-col md:flex-row md:items-center justify-between gap-4 border border-gray-700">
-            <div class="flex items-start gap-3">
-                <div class="w-10 h-10 bg-accent/20 rounded-full flex items-center justify-center">
-                    <i class="fas fa-user text-accent"></i>
-                </div>
-                <div>
-                    <h6 class="text-white font-medium">${reg.name}</h6>
-                    <p class="text-gray-400 text-sm">${reg.email}</p>
-                    <p class="text-gray-500 text-xs mt-1">
-                        <i class="fas fa-clock ml-1"></i>
-                        ${new Date(reg.registeredAt).toLocaleDateString('ar-JO')}
-                    </p>
-                </div>
-            </div>
-            
-            <div class="flex items-center gap-3">
-                <span class="px-3 py-1 rounded-full text-xs ${getStatusBadgeClass(reg.status)}">
-                    ${getStatusText(reg.status)}
-                </span>
-                <div class="flex gap-2">
-                    ${reg.status !== 'approved' ? `
-                        <button onclick="approveRegistration('${reg._id}')" 
-                            class="bg-green-500/20 text-green-400 px-3 py-2 rounded-lg text-sm hover:bg-green-500 hover:text-white transition"
-                            title="قبول">
-                            <i class="fas fa-check"></i>
-                        </button>
-                    ` : ''}
+            container.innerHTML = '';
+            registrations.forEach(reg => {
+                const regDiv = document.createElement('div');
+                regDiv.className = 'bg-primary p-4 rounded-lg flex flex-col md:flex-row md:items-center justify-between gap-4 border border-gray-700';
+                
+                regDiv.innerHTML = `
+                    <div class="flex items-start gap-3">
+                        <div class="w-10 h-10 bg-accent/20 rounded-full flex items-center justify-center">
+                            <i class="fas fa-user text-accent"></i>
+                        </div>
+                        <div>
+                            <h6 class="text-white font-medium reg-name-h"></h6>
+                            <p class="text-gray-400 text-sm reg-email-p"></p>
+                            <p class="text-gray-500 text-xs mt-1">
+                                <i class="fas fa-clock ml-1"></i>
+                                ${new Date(reg.registeredAt).toLocaleDateString('ar-JO')}
+                            </p>
+                        </div>
+                    </div>
                     
-                    ${reg.status !== 'rejected' ? `
-                        <button onclick="rejectRegistration('${reg._id}')" 
-                            class="bg-red-500/20 text-red-400 px-3 py-2 rounded-lg text-sm hover:bg-red-500 hover:text-white transition"
-                            title="رفض">
-                            <i class="fas fa-times"></i>
-                        </button>
-                    ` : ''}
+                    <div class="flex items-center gap-3">
+                        <span class="px-3 py-1 rounded-full text-xs ${getStatusBadgeClass(reg.status)}">
+                            ${getStatusText(reg.status)}
+                        </span>
+                        <div class="flex gap-2">
+                            ${reg.status !== 'approved' ? `
+                                <button class="bg-green-500/20 text-green-400 px-3 py-2 rounded-lg text-sm hover:bg-green-500 hover:text-white transition approve-btn"
+                                    title="قبول">
+                                    <i class="fas fa-check"></i>
+                                </button>
+                            ` : ''}
+                            
+                            ${reg.status !== 'rejected' ? `
+                                <button class="bg-red-500/20 text-red-400 px-3 py-2 rounded-lg text-sm hover:bg-red-500 hover:text-white transition reject-btn"
+                                    title="رفض">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            ` : ''}
 
-                    <button onclick="deleteRegistrationByAdmin('${reg._id}')" 
-                        class="bg-gray-500/10 text-gray-400 px-3 py-2 rounded-lg text-sm hover:bg-red-500 hover:text-white transition"
-                        title="حذف التسجيل">
-                        <i class="fas fa-trash-alt"></i>
-                    </button>
-                </div>
-            </div>
-        </div>
-    `).join('');
+                            <button class="bg-gray-500/10 text-gray-400 px-3 py-2 rounded-lg text-sm hover:bg-red-500 hover:text-white transition delete-btn"
+                                title="حذف التسجيل">
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+                regDiv.querySelector('.reg-name-h').textContent = reg.name;
+                regDiv.querySelector('.reg-email-p').textContent = reg.email;
+                if (regDiv.querySelector('.approve-btn')) regDiv.querySelector('.approve-btn').onclick = () => approveRegistration(reg._id);
+                if (regDiv.querySelector('.reject-btn')) regDiv.querySelector('.reject-btn').onclick = () => rejectRegistration(reg._id);
+                regDiv.querySelector('.delete-btn').onclick = () => deleteRegistrationByAdmin(reg._id);
+                container.appendChild(regDiv);
+            });
         }
 
         function updateStats(data) {
@@ -4695,6 +5062,7 @@ async function loadEvents() {
                     if (document.getElementById('editingEventId')) {
                         document.getElementById('editingEventId').remove();
                     }
+                    updateAdminStats();
 
                 } else if (response.status === 401) {
                     showNotification('غير مصرح لك بالقيام بهذا الإجراء', 'error');
@@ -4707,6 +5075,299 @@ async function loadEvents() {
         showNotification('خطأ في الاتصال بالسيرفر', 'error');
     }
 }
+
+async function deleteEvent(id) {
+    showConfirmModal(
+        'حذف الفعالية',
+        'هل أنت متأكد من رغبتك في حذف هذه الفعالية نهائياً؟ ستفقد كافة بيانات المسجلين فيها أيضاً.',
+        async () => {
+            const token = localStorage.getItem('token');
+            try {
+                const response = await fetch(`${apiBaseUrl}/events/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (response.ok) {
+                    showNotification('تم حذف الفعالية بنجاح', 'success');
+                    loadEvents();
+                    updateAdminStats();
+                } else {
+                    const data = await response.json();
+                    showNotification(data.message || 'فشل حذف الفعالية', 'error');
+                }
+            } catch (error) {
+                console.error('Error deleting event:', error);
+                showNotification('خطأ في الاتصال بالخادم', 'error');
+            }
+        },
+        'danger',
+        'حذف نهائي'
+    );
+}
+
+async function updateEventStatus(id, status) {
+    const token = localStorage.getItem('token');
+    try {
+        const response = await fetch(`${apiBaseUrl}/events/${id}/toggle-status`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ status })
+        });
+        
+        if (response.ok) {
+            showNotification(status ? 'تم نشر الفعالية' : 'تم تحويل الفعالية لمسودة', 'success');
+            loadEvents();
+            updateAdminStats();
+        } else {
+            showNotification('فشل تحديث حالة الفعالية', 'error');
+        }
+    } catch (error) {
+        console.error('Error updating event status:', error);
+        showNotification('خطأ في الاتصال بالخادم', 'error');
+    }
+}
+
+
+
+// --- News Administration Functions ---
+
+function toggleNewsForm() {
+    const container = document.getElementById('newsFormContainer');
+    if (!container) return;
+    container.classList.toggle('hidden');
+    
+    // Reset form if opening for new entry
+    if (!container.classList.contains('hidden')) {
+        document.getElementById('formTitle').textContent = 'إضافة خبر جديد';
+        document.getElementById('newsTitle').value = '';
+        document.getElementById('newsCategory').value = '';
+        document.getElementById('newsDate').value = new Date().toISOString().split('T')[0];
+        document.getElementById('newsTime').value = new Date().toTimeString().split(' ')[0].substring(0, 5);
+        document.getElementById('newsImage').value = '';
+        document.getElementById('newsDescription').value = '';
+        document.getElementById('newsDetails').value = '';
+        document.getElementById('newsIsFeatured').checked = false;
+        document.getElementById('newsFeaturedOrder').value = '0';
+        
+        // Remove editing ID if exists
+        const editingId = document.getElementById('editingNewsId');
+        if (editingId) editingId.remove();
+    }
+}
+
+async function loadNewsAdmin() {
+    const container = document.getElementById('newsList');
+    if (!container) return;
+    
+    container.innerHTML = '<div class="text-center text-gray-500 py-8"><i class="fas fa-spinner fa-spin ml-2"></i> جاري تحميل الأخبار...</div>';
+    
+    try {
+        const response = await fetch(`${apiBaseUrl}/news`);
+        const news = await response.json();
+        
+        const countSpan = document.getElementById('newsCount');
+        if (countSpan) countSpan.textContent = `(${news.length})`;
+        
+        if (news.length === 0) {
+            container.innerHTML = '<div class="text-center text-gray-500 py-8">لا توجد أخبار حالياً</div>';
+            return;
+        }
+        
+        container.innerHTML = '';
+        news.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'bg-[var(--bg-primary)] p-4 rounded-xl border border-[var(--border-light)] flex flex-col md:flex-row md:items-center justify-between gap-4';
+            
+            const content = document.createElement('div');
+            content.className = 'flex items-center gap-4';
+            
+            const imgWrapper = document.createElement('div');
+            imgWrapper.className = 'w-16 h-16 rounded-lg overflow-hidden shrink-0';
+            const img = document.createElement('img');
+            img.src = item.imageUrl || 'https://images.unsplash.com/photo-1556761175-b413da4baf72';
+            img.className = 'w-full h-full object-cover';
+            imgWrapper.appendChild(img);
+            
+            const info = document.createElement('div');
+            const title = document.createElement('h5');
+            title.className = 'text-[var(--text-primary)] font-bold text-sm mb-1';
+            title.textContent = item.title;
+            
+            const meta = document.createElement('div');
+            meta.className = 'flex flex-wrap items-center gap-3 text-xs text-gray-500';
+            
+            const categorySpan = document.createElement('span');
+            categorySpan.innerHTML = '<i class="fas fa-tag ml-1 text-teal-400"></i> ';
+            categorySpan.appendChild(document.createTextNode(item.category));
+            
+            const dateSpan = document.createElement('span');
+            dateSpan.innerHTML = '<i class="far fa-calendar ml-1 text-teal-400"></i> ';
+            dateSpan.appendChild(document.createTextNode(new Date(item.date || item.publishedAt || item.createdAt).toLocaleDateString('ar-EG')));
+            
+            meta.appendChild(categorySpan);
+            meta.appendChild(dateSpan);
+            
+            if (item.isFeatured) {
+                const featuredSpan = document.createElement('span');
+                featuredSpan.className = 'text-yellow-500 font-bold';
+                featuredSpan.innerHTML = `<i class="fas fa-star ml-1"></i> مميز (${item.featuredOrder})`;
+                meta.appendChild(featuredSpan);
+            }
+            
+            info.appendChild(title);
+            info.appendChild(meta);
+            content.appendChild(imgWrapper);
+            content.appendChild(info);
+            
+            const actions = document.createElement('div');
+            actions.className = 'flex gap-2';
+            
+            const editBtn = document.createElement('button');
+            editBtn.className = 'p-2 bg-blue-500/10 text-blue-400 rounded-lg hover:bg-blue-500 hover:text-white transition-all';
+            editBtn.innerHTML = '<i class="fas fa-edit"></i>';
+            editBtn.onclick = () => editNews(item);
+            
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'p-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500 hover:text-white transition-all';
+            deleteBtn.innerHTML = '<i class="fas fa-trash-alt"></i>';
+            deleteBtn.onclick = () => deleteNews(item._id);
+            
+            actions.appendChild(editBtn);
+            actions.appendChild(deleteBtn);
+            
+            div.appendChild(content);
+            div.appendChild(actions);
+            container.appendChild(div);
+        });
+    } catch (error) {
+        console.error('Error loading news admin:', error);
+        container.innerHTML = '<div class="text-center text-red-500 py-8">فشل تحميل الأخبار</div>';
+    }
+}
+
+async function handleCreateNews() {
+    const editingIdInput = document.getElementById('editingNewsId');
+    const editingId = editingIdInput ? editingIdInput.value : null;
+    
+    const newsData = {
+        title: document.getElementById('newsTitle').value,
+        category: document.getElementById('newsCategory').value,
+        date: document.getElementById('newsDate').value,
+        time: document.getElementById('newsTime').value,
+        imageUrl: document.getElementById('newsImage').value,
+        description: document.getElementById('newsDescription').value,
+        details: document.getElementById('newsDetails').value,
+        isFeatured: document.getElementById('newsIsFeatured').checked,
+        featuredOrder: parseInt(document.getElementById('newsFeaturedOrder').value) || 0
+    };
+    
+    if (!newsData.title || !newsData.category || !newsData.description || !newsData.imageUrl) {
+        showNotification('يرجى ملء الحقول المطلوبة (بما في ذلك رابط الصورة)', 'error');
+        return;
+    }
+    
+    const token = localStorage.getItem('token');
+    const btn = document.querySelector('button[onclick="handleCreateNews()"]');
+    const originalText = btn.innerHTML;
+    
+    try {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i> جاري الحفظ...';
+        
+        const url = editingId ? `${apiBaseUrl}/news/${editingId}` : `${apiBaseUrl}/news`;
+        const method = editingId ? 'PUT' : 'POST';
+        
+        const response = await fetch(url, {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify(newsData)
+        });
+        
+        if (response.ok) {
+            showNotification(editingId ? 'تم تحديث الخبر بنجاح' : 'تم نشر الخبر بنجاح', 'success');
+            toggleNewsForm();
+            loadNewsAdmin();
+            updateAdminStats();
+        } else {
+            const data = await response.json();
+            showNotification(data.message || 'فشل حفظ الخبر', 'error');
+        }
+    } catch (error) {
+        console.error('Error saving news:', error);
+        showNotification('خطأ في الاتصال بالخادم', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    }
+}
+
+function editNews(item) {
+    const container = document.getElementById('newsFormContainer');
+    if (container.classList.contains('hidden')) toggleNewsForm();
+    
+    document.getElementById('formTitle').textContent = 'تعديل الخبر';
+    document.getElementById('newsTitle').value = item.title;
+    document.getElementById('newsCategory').value = item.category;
+    
+    const date = new Date(item.date || item.publishedAt || item.createdAt);
+    document.getElementById('newsDate').value = date.toISOString().split('T')[0];
+    document.getElementById('newsTime').value = item.time || date.toTimeString().split(' ')[0].substring(0, 5);
+    
+    document.getElementById('newsImage').value = item.imageUrl || '';
+    document.getElementById('newsDescription').value = item.description;
+    document.getElementById('newsDetails').value = item.details || '';
+    document.getElementById('newsIsFeatured').checked = item.isFeatured;
+    document.getElementById('newsFeaturedOrder').value = item.featuredOrder || 0;
+    
+    let editingIdInput = document.getElementById('editingNewsId');
+    if (!editingIdInput) {
+        editingIdInput = document.createElement('input');
+        editingIdInput.type = 'hidden';
+        editingIdInput.id = 'editingNewsId';
+        container.appendChild(editingIdInput);
+    }
+    editingIdInput.value = item._id;
+    
+    container.scrollIntoView({ behavior: 'smooth' });
+}
+
+function deleteNews(id) {
+    showConfirmModal(
+        'حذف الخبر',
+        'هل أنت متأكد من رغبتك في حذف هذا الخبر نهائياً؟',
+        async () => {
+            const token = localStorage.getItem('token');
+            try {
+                const response = await fetch(`${apiBaseUrl}/news/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (response.ok) {
+                    showNotification('تم حذف الخبر بنجاح', 'success');
+                    loadNewsAdmin();
+                    updateAdminStats();
+                } else {
+                    const data = await response.json();
+                    showNotification(data.message || 'فشل حذف الخبر', 'error');
+                }
+            } catch (error) {
+                console.error('Error deleting news:', error);
+                showNotification('خطأ في الاتصال بالخادم', 'error');
+            }
+        },
+        'danger',
+        'حذف نهائي'
+    );
+}
+
 
 async function loadUserRegistrations() {
     const token = localStorage.getItem('token');
@@ -4736,11 +5397,17 @@ async function loadUserRegistrations() {
         const renderItems = (items, container, emptyMsg) => {
             if (!container) return;
             if (items.length === 0) {
-                container.innerHTML = `<p class="py-6 text-gray-500 text-center col-span-full"><i class="fas fa-info-circle ml-2"></i> ${emptyMsg}</p>`;
+                container.innerHTML = '';
+                const p = document.createElement('p');
+                p.className = 'py-6 text-gray-500 text-center col-span-full';
+                p.innerHTML = '<i class="fas fa-info-circle ml-2"></i> ';
+                p.appendChild(document.createTextNode(emptyMsg));
+                container.appendChild(p);
                 return;
             }
 
-            container.innerHTML = items.map(reg => {
+            container.innerHTML = '';
+            items.forEach(reg => {
                 const event = reg.eventId || {};
                 const statusColors = {
                     'pending': 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
@@ -4755,25 +5422,46 @@ async function loadUserRegistrations() {
 
                 const dateStr = new Date(reg.registeredAt || reg.createdAt).toLocaleDateString('ar-JO');
 
-                return `
-                    <div class="elegant-card p-4 flex flex-col gap-3 group">
-                        <div class="flex items-center gap-4">
-                            <div class="w-12 h-12 rounded-xl bg-gradient-to-br ${event.bgColor || 'from-sky-500 to-teal-500'} flex items-center justify-center text-white text-xl shadow-lg group-hover:scale-110 transition-transform">
-                                <i class="fas ${event.icon || 'fa-calendar-alt'}"></i>
-                            </div>
-                            <div class="flex-1 text-right">
-                                <h4 class="text-white font-bold text-sm">${event.title || reg.eventName || 'تسجيل'}</h4>
-                                <div class="flex flex-wrap gap-3 mt-1">
-                                    <span class="text-gray-400 text-[10px]"><i class="fas fa-calendar-alt ml-1"></i> ${dateStr}</span>
-                                    <span class="px-2 py-0.5 rounded-full text-[10px] border ${statusColors[reg.status] || statusColors.pending}">
-                                        ${statusLabels[reg.status] || reg.status}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }).join('');
+                const card = document.createElement('div');
+                card.className = 'elegant-card p-4 flex flex-col gap-3 group text-right';
+                
+                const top = document.createElement('div');
+                top.className = 'flex items-center gap-4';
+                
+                const iconBox = document.createElement('div');
+                iconBox.className = `w-12 h-12 rounded-xl bg-gradient-to-br ${event.bgColor || 'from-sky-500 to-teal-500'} flex items-center justify-center text-white text-xl shadow-lg group-hover:scale-110 transition-transform`;
+                iconBox.innerHTML = `<i class="fas ${event.icon || 'fa-calendar-alt'}"></i>`;
+                
+                const info = document.createElement('div');
+                info.className = 'flex-1';
+                
+                const title = document.createElement('h4');
+                title.className = 'text-white font-bold text-sm';
+                title.textContent = event.title || reg.eventName || 'تسجيل';
+                
+                const meta = document.createElement('div');
+                meta.className = 'flex flex-wrap gap-3 mt-1';
+                
+                const dateSpan = document.createElement('span');
+                dateSpan.className = 'text-gray-400 text-[10px]';
+                dateSpan.innerHTML = '<i class="fas fa-calendar-alt ml-1"></i> ';
+                dateSpan.appendChild(document.createTextNode(dateStr));
+                
+                const statusSpan = document.createElement('span');
+                statusSpan.className = `px-2 py-0.5 rounded-full text-[10px] border ${statusColors[reg.status] || statusColors.pending}`;
+                statusSpan.textContent = statusLabels[reg.status] || reg.status;
+                
+                meta.appendChild(dateSpan);
+                meta.appendChild(statusSpan);
+                info.appendChild(title);
+                info.appendChild(meta);
+                
+                top.appendChild(iconBox);
+                top.appendChild(info);
+                card.appendChild(top);
+                
+                container.appendChild(card);
+            });
         };
 
         const listContainer = document.getElementById('user-courses-list') || document.getElementById('user-events-list');
@@ -5044,25 +5732,31 @@ async function loadUserCertificates() {
         }
 
         async function deleteUser(id) {
-            if (!confirm('هل أنت متأكد من حذف هذا المستخدم؟')) return;
+            showConfirmModal(
+                'حذف المستخدم',
+                'هل أنت متأكد من حذف هذا المستخدم؟ لا يمكن التراجع عن هذا الإجراء.',
+                async () => {
+                    const token = localStorage.getItem('token');
+                    try {
+                        const response = await fetch(`${apiBaseUrl}/user/${id}`, {
+                            method: 'DELETE',
+                            headers: { 'Authorization': `Bearer ${token}` }
+                        });
 
-            const token = localStorage.getItem('token');
-            try {
-                const response = await fetch(`${apiBaseUrl}/user/${id}`, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-
-                if (response.ok) {
-                    showNotification('تم حذف المستخدم بنجاح', 'success');
-                    fetchUsers();
-                } else {
-                    showNotification('فشل حذف المستخدم', 'error');
-                }
-            } catch (error) {
-                console.error('Error deleting user:', error);
-                showNotification('خطأ في الاتصال', 'error');
-            }
+                        if (response.ok) {
+                            showNotification('تم حذف المستخدم بنجاح', 'success');
+                            fetchUsers();
+                        } else {
+                            showNotification('فشل حذف المستخدم', 'error');
+                        }
+                    } catch (error) {
+                        console.error('Error deleting user:', error);
+                        showNotification('خطأ في الاتصال', 'error');
+                    }
+                },
+                'danger',
+                'حذف نهائي'
+            );
         }
 
         async function updateUserRole(id, role) {
@@ -5187,22 +5881,17 @@ home: `<!-- Hero Section -->
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
                     <!-- مساحة الفيديو -->
                     <div class="relative">
-                        <div class="elegant-card rounded-3xl overflow-hidden">
-                            <div id="videoPlayer" class="aspect-video bg-gradient-to-br from-[var(--bg-secondary)] to-[var(--bg-primary)] flex items-center justify-center">
-                                <div class="text-center p-8">
-                                    <div class="w-20 h-20 mx-auto mb-6 bg-gradient-to-r from-sky-500 to-teal-500 rounded-full flex items-center justify-center shadow-lg floating">
-                                        <i class="fas fa-play text-white text-2xl"></i>
-                                    </div>
-                                    <p class="text-gray-400">سيظهر الفيديو هنا</p>
-                                </div>
-                            </div>
-                            <div class="p-4 bg-[#0f2642]/80 flex justify-between items-center">
-                                <div class="flex items-center gap-4">
-                                    <button class="text-teal-400 hover:text-white transition-colors"><i class="fas fa-play"></i></button>
-                                    <button class="text-gray-400 hover:text-white"><i class="fas fa-volume-up"></i></button>
-                                </div>
-                                <div class="text-sm text-gray-400">00:00 / 05:30</div>
-                                <button class="text-gray-400 hover:text-white"><i class="fas fa-expand"></i></button>
+                        <div class="elegant-card rounded-3xl overflow-hidden relative group">
+                            <div id="videoPlayer" class="aspect-video bg-black overflow-hidden relative">
+                                <video 
+                                    width="100%" 
+                                    height="100%" 
+                                    controls
+                                    title="EYFV"
+                                    class="w-full h-full object-cover">
+                                    <source src="EYFV.mp4" type="video/mp4">
+                                    متصفحك لا يدعم تشغيل الفيديو.
+                                </video>
                             </div>
                         </div>
                         <!-- زخارف حول الفيديو -->
@@ -6426,7 +7115,7 @@ account: `
                             </div>
 
                             <!-- المظهر -->
-                            <div class="flex items-center justify-between p-4 bg-[var(--bg-primary)] rounded-xl border border-[var(--border-light)]">
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-[var(--bg-primary)] rounded-xl border border-[var(--border-light)] gap-3">
                                 <div class="flex items-center gap-3">
                                     <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-sky-500/20 to-teal-500/20 flex items-center justify-center">
                                         <i class="fas fa-circle-half-stroke text-sky-400"></i>
@@ -6436,12 +7125,12 @@ account: `
                                         <p class="text-gray-500 text-xs">وضع العرض المفضل</p>
                                     </div>
                                 </div>
-                                <div class="flex gap-2 p-1 bg-[var(--bg-primary)] rounded-lg border border-[var(--border-light)]">
-                                    <button onclick="setTheme('dark')" id="btn-dark-mode" class="theme-btn px-4 py-1.5 rounded-lg text-sm text-gray-400 hover:text-[var(--text-primary)] transition-all duration-300 active">
+                                <div class="flex w-full sm:w-auto p-1 bg-[var(--bg-primary)] rounded-lg border border-[var(--border-light)]">
+                                    <button onclick="setTheme('dark')" id="btn-dark-mode" class="flex-1 sm:flex-none theme-btn px-6 py-2 rounded-lg text-sm text-gray-400 hover:text-[var(--text-primary)] transition-all duration-300">
                                         <i class="fas fa-moon ml-1"></i>
                                         داكن
                                     </button>
-                                    <button onclick="setTheme('light')" id="btn-light-mode" class="theme-btn px-4 py-1.5 rounded-lg text-sm text-gray-400 hover:text-[var(--text-primary)] transition-all duration-300 active">
+                                    <button onclick="setTheme('light')" id="btn-light-mode" class="flex-1 sm:flex-none theme-btn px-6 py-2 rounded-lg text-sm text-gray-400 hover:text-[var(--text-primary)] transition-all duration-300">
                                         <i class="fas fa-sun ml-1"></i>
                                         فاتح
                                     </button>
@@ -6837,15 +7526,23 @@ chat:`<section class="pt-24 md:pt-32 pb-12 px-4 md:px-6 min-h-screen relative ov
                     </div>
 
                     <!-- منطقة الإدخال -->
-                    <div class="p-4 border-t border-[var(--border-light)]">
-                        <div class="flex gap-2">
-                            <div class="flex-1 relative">
+                    <div class="p-4 border-t border-[var(--border-light)] flex flex-col gap-2">
+                        <div id="chatImagePreview" class="hidden items-center justify-between text-xs text-sky-400 bg-[var(--bg-primary)] p-2 rounded-lg border border-sky-500/30">
+                            <span id="chatImageName" class="truncate"></span>
+                            <button onclick="clearChatImage()" class="text-red-400 hover:text-red-300 ml-2"><i class="fas fa-times"></i></button>
+                        </div>
+                        <div class="flex gap-2 relative">
+                            <div class="flex-1 relative flex items-center bg-[var(--bg-primary)] border border-[var(--border-light)] rounded-xl focus-within:border-sky-400 transition-all">
+                                <label for="chatImageInput" class="cursor-pointer px-3 text-gray-500 hover:text-sky-400 transition-colors" title="إرفاق صورة">
+                                    <i class="fas fa-paperclip text-lg"></i>
+                                </label>
+                                <input type="file" id="chatImageInput" accept="image/*" class="hidden" onchange="previewChatImage(this)">
                                 <input type="text" id="chatInput" placeholder="اكتب رسالة..." disabled
-                                    class="w-full px-4 py-3 bg-[var(--bg-primary)] border border-[var(--border-light)] rounded-xl text-[var(--text-primary)] text-sm focus:border-sky-400 focus:outline-none transition-all placeholder:text-gray-500"
+                                    class="w-full py-3 pr-2 pl-4 bg-transparent text-[var(--text-primary)] text-sm focus:outline-none placeholder:text-gray-500 disabled:opacity-50"
                                     onkeypress="if(event.key==='Enter') sendChatMessage()">
                             </div>
                             <button onclick="sendChatMessage()" id="chatSendBtn" disabled
-                                class="w-12 h-12 rounded-xl bg-gradient-to-r from-sky-500 to-teal-500 text-white hover:shadow-lg hover:shadow-teal-500/30 transition-all disabled:opacity-50 disabled:hover:shadow-none flex items-center justify-center">
+                                class="w-12 h-12 rounded-xl bg-gradient-to-r from-sky-500 to-teal-500 text-white hover:shadow-lg hover:shadow-teal-500/30 transition-all disabled:opacity-50 disabled:hover:shadow-none flex items-center justify-center shrink-0">
                                 <i class="fas fa-paper-plane"></i>
                             </button>
                         </div>
@@ -7342,7 +8039,7 @@ adminPanel: `
                         </div>
                         <span class="text-green-400 text-sm bg-green-500/20 px-3 py-1 rounded-full border border-green-500/30">+١٢</span>
                     </div>
-                    <div class="text-3xl font-bold gradient-text mb-1">١,٢٤٧</div>
+                    <div class="text-3xl font-bold gradient-text mb-1" id="admin-total-users">...</div>
                     <div class="text-gray-400 text-sm mb-3">إجمالي المستخدمين</div>
                     <div class="h-1.5 bg-[var(--bg-primary)] rounded-full overflow-hidden">
                         <div class="w-3/4 h-full bg-gradient-to-r from-sky-400 to-teal-400 rounded-full"></div>
@@ -7360,7 +8057,7 @@ adminPanel: `
                         </div>
                         <span class="text-green-400 text-sm bg-green-500/20 px-3 py-1 rounded-full border border-green-500/30">+٥</span>
                     </div>
-                    <div class="text-3xl font-bold gradient-text mb-1">٢٤</div>
+                    <div class="text-3xl font-bold gradient-text mb-1" id="admin-total-courses">...</div>
                     <div class="text-gray-400 text-sm mb-3">الكورسات</div>
                     <div class="h-1.5 bg-[var(--bg-primary)] rounded-full overflow-hidden">
                         <div class="w-3/4 h-full bg-gradient-to-r from-teal-400 to-sky-400 rounded-full"></div>
@@ -7378,7 +8075,7 @@ adminPanel: `
                         </div>
                         <span class="text-green-400 text-sm bg-green-500/20 px-3 py-1 rounded-full border border-green-500/30">+٣</span>
                     </div>
-                    <div class="text-3xl font-bold gradient-text mb-1">١٥</div>
+                    <div class="text-3xl font-bold gradient-text mb-1" id="admin-total-events">...</div>
                     <div class="text-gray-400 text-sm mb-3">الفعاليات</div>
                     <div class="h-1.5 bg-[var(--bg-primary)] rounded-full overflow-hidden">
                         <div class="w-2/3 h-full bg-gradient-to-r from-sky-400 to-teal-400 rounded-full"></div>
@@ -7396,7 +8093,7 @@ adminPanel: `
                         </div>
                         <span class="text-green-400 text-sm bg-green-500/20 px-3 py-1 rounded-full border border-green-500/30">+٢</span>
                     </div>
-                    <div class="text-3xl font-bold gradient-text mb-1">٣٢</div>
+                    <div class="text-3xl font-bold gradient-text mb-1" id="admin-total-news">...</div>
                     <div class="text-gray-400 text-sm mb-3">الأخبار</div>
                     <div class="h-1.5 bg-[var(--bg-primary)] rounded-full overflow-hidden">
                         <div class="w-3/4 h-full bg-gradient-to-r from-teal-400 to-sky-400 rounded-full"></div>
@@ -7882,6 +8579,132 @@ adminPanel: `
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+</section>
+`,
+error404: `
+<section class="min-h-screen flex items-center justify-center py-20 px-6 relative overflow-hidden home-animate">
+    <div class="absolute inset-0 pointer-events-none">
+        <div class="stars opacity-30"></div>
+        <div class="mosque-silhouette opacity-10"></div>
+    </div>
+    
+    <div class="max-w-2xl w-full text-center relative z-10">
+        <div class="relative inline-block mb-12">
+            <div class="absolute -inset-8 bg-gradient-to-r from-sky-500/20 to-teal-500/20 rounded-full blur-3xl animate-pulse"></div>
+            <div class="w-40 h-40 md:w-56 md:h-56 bg-gradient-to-br from-secondary to-primary rounded-3xl flex items-center justify-center border border-sky-500/30 shadow-2xl floating relative">
+                <i class="fas fa-shield-slash text-7xl md:text-9xl text-sky-400/80 icon-sky-glow"></i>
+                <div class="absolute -top-4 -right-4 w-16 h-16 bg-gradient-to-br from-sky-500 to-teal-500 rounded-2xl flex items-center justify-center text-white font-bold text-3xl shadow-lg ring-4 ring-primary">404</div>
+            </div>
+        </div>
+        
+        <h2 class="text-4xl md:text-6xl font-bold mb-6">
+            <span class="gradient-text">المحتوى غير متاح</span>
+            <br>أو صفحة غير موجودة
+        </h2>
+        
+        <p class="text-gray-400 text-lg md:text-xl mb-12 leading-relaxed max-w-xl mx-auto">
+            عذراً، يبدو أنك حاولت الوصول لملف محمي أو صفحة غير موجودة في النظام. تم تقييد الوصول المباشر للملفات لضمان أمن الموقع.
+        </p>
+        
+        <div class="flex flex-col sm:flex-row gap-6 justify-center">
+            <button onclick="loadPage('home')" class="btn-gradient px-12 py-4 text-lg group rounded-2xl">
+                <i class="fas fa-home ml-2 group-hover:-translate-y-1 transition-transform"></i>
+                العودة للرئيسية
+            </button>
+            <button onclick="window.history.back()" class="btn-outline px-12 py-4 text-lg rounded-2xl">
+                <i class="fas fa-arrow-right ml-2"></i>
+                رجوع للخلف
+            </button>
+        </div>
+    </div>
+</section>
+`,
+privacy: `
+<section class="min-h-screen py-20 px-6 relative overflow-hidden home-animate">
+    <div class="absolute inset-0 pointer-events-none">
+        <div class="stars opacity-20"></div>
+        <div class="mosque-silhouette opacity-10"></div>
+    </div>
+    
+    <div class="max-w-4xl mx-auto relative z-10">
+        <div class="text-center mb-16">
+            <div class="flex justify-center items-center gap-4 mb-6">
+                <i class="fas fa-user-shield text-5xl text-sky-400 icon-sky-glow floating"></i>
+            </div>
+            <h2 class="text-4xl md:text-5xl font-bold mb-4 hero-title-animation">
+                سياسة <span class="gradient-text">الخصوصية</span> واستخدام الحسابات
+            </h2>
+            <div class="w-24 h-1 bg-gradient-to-r from-sky-400 to-teal-400 mx-auto rounded-full"></div>
+        </div>
+
+        <div class="space-y-8">
+            <!-- الموافقة على الحساب -->
+            <div class="elegant-card p-8 rounded-2xl border-r-4 border-r-sky-500">
+                <h3 class="text-2xl font-bold mb-4 flex items-center gap-3">
+                    <i class="fas fa-user-check text-sky-400"></i>
+                    الموافقة على الحساب
+                </h3>
+                <ul class="space-y-3 text-gray-300 leading-relaxed">
+                    <li class="flex items-start gap-2"><i class="fas fa-circle text-[0.5rem] mt-2 text-sky-400/50"></i> عند تسجيل حساب جديد، لا يتم تفعيل الحساب تلقائيًا.</li>
+                    <li class="flex items-start gap-2"><i class="fas fa-circle text-[0.5rem] mt-2 text-sky-400/50"></i> يجب على المدير مراجعة الحساب الجديد والموافقة عليه أو رفضه لضمان جودة المجتمع.</li>
+                    <li class="flex items-start gap-2"><i class="fas fa-circle text-[0.5rem] mt-2 text-sky-400/50"></i> سيتم إشعار المستخدم بحالة الموافقة أو الرفض فور اتخاذ القرار.</li>
+                </ul>
+            </div>
+
+            <!-- سجل النشاط -->
+            <div class="elegant-card p-8 rounded-2xl border-r-4 border-r-teal-500">
+                <h3 class="text-2xl font-bold mb-4 flex items-center gap-3">
+                    <i class="fas fa-history text-teal-400"></i>
+                    سجل النشاط لدى المدير
+                </h3>
+                <p class="text-gray-300 leading-relaxed mb-4">
+                    جميع حركات المستخدم داخل الموقع تُسجل في سجل خاص بالمدير لضمان أمان وسلامة الموقع، ويشمل ذلك:
+                </p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="flex items-center gap-2 bg-white/5 p-3 rounded-xl border border-white/10">
+                        <i class="fas fa-sign-in-alt text-teal-400"></i> <span>تسجيل الدخول والخروج</span>
+                    </div>
+                    <div class="flex items-center gap-2 bg-white/5 p-3 rounded-xl border border-white/10">
+                        <i class="fas fa-eye text-teal-400"></i> <span>تصفح الصفحات</span>
+                    </div>
+                    <div class="flex items-center gap-2 bg-white/5 p-3 rounded-xl border border-white/10">
+                        <i class="fas fa-edit text-teal-400"></i> <span>التعديلات والإجراءات</span>
+                    </div>
+                    <div class="flex items-center gap-2 bg-white/5 p-3 rounded-xl border border-white/10">
+                        <i class="fas fa-shield-alt text-teal-400"></i> <span>الإجراءات الأمنية</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- تشفير وحماية البيانات -->
+            <div class="elegant-card p-8 rounded-2xl border-r-4 border-r-sky-500">
+                <h3 class="text-2xl font-bold mb-4 flex items-center gap-3">
+                    <i class="fas fa-lock text-sky-400"></i>
+                    تشفير وحماية البيانات
+                </h3>
+                <p class="text-gray-300 leading-relaxed">
+                    جميع البيانات الشخصية وسجلات النشاط للمستخدمين يتم تخزينها بشكل مشفر لضمان حماية المعلومات من الوصول غير المصرح به، ونستخدم معايير تشفير متقدمة (مثل AES-256) لتأمين البيانات أثناء التخزين والنقل. البيانات لا تُشارك مع أي طرف ثالث دون موافقة صريحة.
+                </p>
+            </div>
+
+            <!-- الخصوصية وأمان الحساب -->
+            <div class="elegant-card p-8 rounded-2xl border-r-4 border-r-teal-500">
+                <h3 class="text-2xl font-bold mb-4 flex items-center gap-3">
+                    <i class="fas fa-shield-virus text-teal-400"></i>
+                    الخصوصية وأمان الحساب
+                </h3>
+                <p class="text-gray-300 leading-relaxed">
+                    حماية خصوصية المستخدم هي أولويتنا القصوى، وجميع الإجراءات المتخذة تتوافق مع أفضل الممارسات الأمنية العالمية. يمكن للمدير الوصول إلى سجل النشاط فقط لأغراض المراقبة، الإدارة، وحماية سلامة النظام.
+                </p>
+            </div>
+
+            <div class="text-center pt-8">
+                <button onclick="loadPage('home')" class="btn-gradient px-10 py-4 text-lg">
+                    العودة للرئيسية
+                </button>
             </div>
         </div>
     </div>

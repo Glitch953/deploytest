@@ -2741,7 +2741,7 @@
                                 تحديث
                             </button>
                         </div>
-                        <div class="overflow-x-auto relative z-10">
+                        <div class="overflow-x-auto overflow-y-auto max-h-[500px] custom-scrollbar relative z-10">
                             <table class="w-full text-right text-[#94CEF4]">
                                 <thead class="text-xs uppercase bg-[#0B1521] text-[#4BADED] border border-[#1794E8]/20">
                                     <tr>
@@ -3738,15 +3738,25 @@
                                     </div>
                                 </div>
                                 <!-- Input -->
-                                <div class="p-4 border-t border-gray-700 bg-secondary/80 backdrop-blur-md">
+                                <div class="p-4 border-t border-gray-700 bg-secondary/80 backdrop-blur-md flex flex-col gap-2">
+                                    <div id="chatImagePreview" class="hidden items-center justify-between text-xs text-accent bg-primary p-2 rounded-lg border border-accent/30">
+                                        <span id="chatImageName" class="truncate"></span>
+                                        <button onclick="clearChatImage()" class="text-red-400 hover:text-red-300 ml-2"><i class="fas fa-times"></i></button>
+                                    </div>
                                     <div class="flex gap-2">
-                                        <input type="text" id="chatInput" placeholder="اكتب رسالة..." disabled
-                                            class="flex-1 px-4 py-3 bg-primary border border-gray-700 rounded-xl text-white text-sm focus:border-accent focus:outline-none"
-                                            onkeypress="if(event.key==='Enter') sendChatMessage()">
-                                            <button onclick="sendChatMessage()" id="chatSendBtn" disabled
-                                                class="bg-accent text-white px-5 py-3 rounded-xl hover:bg-accent-hover transition disabled:opacity-50">
-                                                <i class="fas fa-paper-plane"></i>
-                                            </button>
+                                        <div class="flex-1 flex items-center bg-primary border border-gray-700 rounded-xl focus-within:border-accent transition-all overflow-hidden">
+                                            <label for="chatImageInput" class="cursor-pointer px-3 text-gray-500 hover:text-accent transition-colors" title="إرفاق صورة">
+                                                <i class="fas fa-paperclip text-lg"></i>
+                                            </label>
+                                            <input type="file" id="chatImageInput" accept="image/*" class="hidden" onchange="previewChatImage(this)">
+                                            <input type="text" id="chatInput" placeholder="اكتب رسالة..." disabled
+                                                class="w-full py-3 pr-2 pl-4 bg-transparent text-white text-sm focus:outline-none"
+                                                onkeypress="if(event.key==='Enter') sendChatMessage()">
+                                        </div>
+                                        <button onclick="sendChatMessage()" id="chatSendBtn" disabled
+                                            class="bg-accent text-white px-5 py-3 rounded-xl hover:bg-accent-hover transition disabled:opacity-50 shrink-0">
+                                            <i class="fas fa-paper-plane"></i>
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -4012,6 +4022,15 @@
                     border: 'border-rose-500/40',
                     btnGradient: 'from-rose-500 to-red-700',
                     btnShadow: 'shadow-rose-500/30',
+                    premium: true
+                },
+                'delete': {
+                    icon: 'fa-user-times',
+                    iconColor: 'text-red-500',
+                    iconBg: 'bg-red-600/20',
+                    border: 'border-red-600/50',
+                    btnGradient: 'from-red-600 to-red-900',
+                    btnShadow: 'shadow-red-600/40',
                     premium: true
                 }
             };
@@ -6222,7 +6241,17 @@
                         <div class="flex ${isMe ? 'justify-end' : 'justify-start'} mb-2">
                             <div class="max-w-[70%] ${isMe ? 'glass-bubble glass-bubble-me text-white rounded-br-none' : 'glass-bubble bg-gray-700 text-gray-200 rounded-bl-none'} px-4 py-2 rounded-2xl shadow-sm">
                                 ${chatCurrentType === 'group' && !isMe ? `<p class="text-[10px] text-accent font-bold mb-1">${escapeHTML(senderName)}</p>` : ''}
-                                <p class="text-sm break-words">${escapeHTML(msg.content)}</p>
+                                
+                                ${msg.imageUrl ? `
+                                    <div class="mb-2 overflow-hidden rounded-lg border border-white/10">
+                                        <img src="${msg.imageUrl}" alt="صورة" 
+                                             class="max-w-full h-auto cursor-pointer hover:opacity-90 transition-opacity" 
+                                             onclick="window.open('${msg.imageUrl}', '_blank')">
+                                    </div>
+                                ` : ''}
+
+                                ${msg.content ? `<p class="text-sm break-words">${escapeHTML(msg.content)}</p>` : ''}
+                                
                                 <div class="text-[10px] opacity-70 mt-1 text-right flex items-center justify-end gap-1">
                                     ${new Date(msg.createdAt || Date.now()).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
                                     ${isMe && chatCurrentType === 'private' ? (msg.read ? '<i class="fas fa-check-double text-blue-300"></i>' : '<i class="fas fa-check"></i>') : ''}
@@ -6242,23 +6271,56 @@
             }
         }
 
+        let selectedChatImageFile = null;
+
+        function previewChatImage(input) {
+            if (input.files && input.files[0]) {
+                selectedChatImageFile = input.files[0];
+                const nameEl = document.getElementById('chatImageName');
+                if (nameEl) nameEl.innerText = selectedChatImageFile.name;
+                const previewEl = document.getElementById('chatImagePreview');
+                if (previewEl) {
+                    previewEl.classList.remove('hidden');
+                    previewEl.classList.add('flex');
+                }
+                const sendBtn = document.getElementById('chatSendBtn');
+                if (sendBtn) sendBtn.disabled = false;
+            }
+        }
+
+        function clearChatImage() {
+            selectedChatImageFile = null;
+            const fileInput = document.getElementById('chatImageInput');
+            if (fileInput) fileInput.value = '';
+            const previewEl = document.getElementById('chatImagePreview');
+            if (previewEl) {
+                previewEl.classList.add('hidden');
+                previewEl.classList.remove('flex');
+            }
+            const input = document.getElementById('chatInput');
+            if (!input.value.trim() && !selectedChatImageFile) {
+                const sendBtn = document.getElementById('chatSendBtn');
+                if (sendBtn) sendBtn.disabled = true;
+            }
+        }
+
         async function sendChatMessage() {
             const input = document.getElementById('chatInput');
             const content = input.value.trim();
             const currentId = chatCurrentType === 'group' ? chatCurrentGroupId : chatCurrentUserId;
-            if (!content || !currentId) return;
+            
+            if ((!content && !selectedChatImageFile) || !currentId) return;
 
             input.value = '';
-            input.focus();
 
-            // Optimistic UI update
             const container = document.getElementById('chatMessages');
             const tempId = Date.now();
 
             const tempMsg = `
                 <div class="flex justify-end mb-2" id="temp-${tempId}">
                     <div class="max-w-[70%] glass-bubble glass-bubble-me text-white rounded-br-none px-4 py-2 rounded-2xl shadow-sm opacity-70">
-                        <p class="text-sm break-words">${escapeHTML(content)}</p>
+                        ${selectedChatImageFile ? '<div class="mb-1 text-[10px]"><i class="fas fa-image"></i> جاري إرسال صورة...</div>' : ''}
+                        ${content ? `<p class="text-sm break-words">${escapeHTML(content)}</p>` : ''}
                         <div class="text-[10px] opacity-70 mt-1 text-right"><i class="fas fa-clock"></i></div>
                     </div>
                 </div>
@@ -6272,17 +6334,24 @@
                     ? `${apiBaseUrl}/chat/send-group`
                     : `${apiBaseUrl}/chat/send`;
 
-                const body = chatCurrentType === 'group'
-                    ? { groupId: currentId, content }
-                    : { receiverId: currentId, content };
+                const formData = new FormData();
+                if (chatCurrentType === 'group') {
+                    formData.append('groupId', currentId);
+                } else {
+                    formData.append('receiverId', currentId);
+                }
+                
+                if (content) formData.append('content', content);
+                if (selectedChatImageFile) formData.append('image', selectedChatImageFile);
 
                 const res = await fetch(url, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                    body: JSON.stringify(body)
+                    headers: { 'Authorization': `Bearer ${token}` },
+                    body: formData
                 });
 
                 if (res.ok) {
+                    clearChatImage();
                     loadMessages(currentId, true);
                     loadConversations(false);
                 } else {
@@ -6291,7 +6360,9 @@
                     input.value = content;
                 }
             } catch (error) {
-                document.getElementById(`temp-${tempId}`).remove();
+                if (document.getElementById(`temp-${tempId}`)) {
+                    document.getElementById(`temp-${tempId}`).remove();
+                }
                 console.error('Send error:', error);
             }
         }
@@ -6467,7 +6538,10 @@
     </script>
     <script>
         async function deleteUser(userId) {
-            showConfirmModal('حذف الحساب', 'هل أنت متأكد من حذف هذا الحساب؟ سيؤدي ذلك إلى حذف جميع البيانات المرتبطة بالمستخدم بشكل نهائي.', async () => {
+            showConfirmModal(
+                'حذف الحساب نهائياً', 
+                'هل أنت متأكد من حذف هذا الحساب؟<br><br><span class="text-red-400 text-sm">⚠️ تحذير: سيؤدي ذلك إلى مسح جميع البيانات المرتبطة بالمستخدم بشكل دائم ولن تتمكن من التراجع عن هذا الإجراء!</span>', 
+                async () => {
                 const token = (typeof getToken === 'function') ? getToken() : (localStorage.getItem('token') || sessionStorage.getItem('token'));
                 try {
                     const response = await fetch(`${apiBaseUrl}/user/${userId}`, {
@@ -6488,7 +6562,7 @@
                     console.error('Error deleting user:', error);
                     showNotification('حدث خطأ أثناء الاتصال بالخادم', 'error');
                 }
-            }, 'danger');
+            }, 'delete', 'نعم، احذف الحساب نهائياً');
         }
 
         async function updateUserRole(id, role) {

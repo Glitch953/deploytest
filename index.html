@@ -6,8 +6,8 @@
     <title>ملتقى شباب التميز</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="scripts/lang.js"></script>
-    <link rel="stylesheet" href="style.css">
+    <script src="/scripts/lang.js"></script>
+    <link rel="stylesheet" href="/style.css">
 </head>
 <body class="bg-gradient-to-b from-primary via-secondary to-primary">
 
@@ -26,50 +26,54 @@
         </div>
 
         <div class="hidden md:flex items-center gap-1">
-            <a href="#" class="nav-link group" onclick="loadPage('home')" data-role="user admin guest">
+            <a href="javascript:void(0)" class="nav-link group" onclick="loadPage('home')" data-role="user admin guest">
                 <i class="fas fa-home ml-1.5 nav-icon"></i>
                 <span class="nav-text">الرئيسية</span>
                 <span class="nav-indicator"></span>
             </a>
-            <a href="#" class="nav-link group" onclick="loadPage('news')" data-role="user admin guest">
+            <a href="javascript:void(0)" class="nav-link group" onclick="loadPage('news')" data-role="user admin guest">
                 <i class="fas fa-chart-line ml-1.5 nav-icon"></i>
                 <span class="nav-text">اخر الاخبار</span>
                 <span class="nav-indicator"></span>
             </a>
-            <a href="#" class="nav-link group" onclick="loadPage('events')" data-role="user admin guest">
+            <a href="javascript:void(0)" class="nav-link group" onclick="loadPage('events')" data-role="user admin guest">
                 <i class="fas fa-calendar-alt ml-1.5 nav-icon"></i>
                 <span class="nav-text">الفعاليات</span>
                 <span class="nav-indicator"></span>
             </a>
-            <a href="#" class="nav-link group" onclick="loadPage('userSearch')" data-role="user admin guest">
+            <a href="javascript:void(0)" class="nav-link group" onclick="loadPage('userSearch')" data-role="user admin guest">
                 <i class="fas fa-search ml-1.5 nav-icon"></i>
                 <span class="nav-text">بحث</span>
                 <span class="nav-indicator"></span>
             </a>
-            <a href="#" class="nav-link group" onclick="loadPage('quizGame')" data-role="user admin">
+            <a href="javascript:void(0)" class="nav-link group" onclick="loadPage('quizGame')" data-role="user admin">
                 <i class="fas fa-gamepad ml-1.5 nav-icon"></i>
                 <span class="nav-text">لعبة الأسئلة</span>
                 <span class="nav-indicator"></span>
             </a>
-            <a href="#" class="nav-link user-only" style="display: none;" onclick="loadPage('chat')" data-role="user admin">
+            <a href="javascript:void(0)" class="nav-link user-only" style="display: none;" onclick="loadPage('chat')" data-role="user admin">
                 <i class="fas fa-comments ml-1.5 nav-icon"></i>
                 <span class="nav-text">المحادثات</span>
                 <span class="nav-indicator"></span>
                 <span id="navUnreadBadge" class="unread-badge hidden"></span>
             </a>
-            <a href="#" class="nav-link user-only" style="display: none;" onclick="loadPage('contact')" data-role="user guest">
+            <a href="javascript:void(0)" class="nav-link user-only" style="display: none;" onclick="loadPage('contact')" data-role="user guest">
                 <i class="fas fa-envelope ml-1.5 nav-icon"></i>
                 <span class="nav-text">اتصل بنا</span>
                 <span class="nav-indicator"></span>
             </a>
-            <a href="#" class="nav-link admin-only" style="display: none;" onclick="loadPage('adminPanel')" data-role="admin">
+            <a href="javascript:void(0)" class="nav-link admin-only" style="display: none;" onclick="loadPage('adminPanel')" data-role="admin">
                 <i class="fas fa-user-shield ml-1.5 nav-icon"></i>
                 <span class="nav-text">صفحة التحكم</span>
                 <span class="nav-indicator"></span>
             </a>
         </div>
 
-        <div class="flex items-center gap-4">
+        <div class="flex items-center gap-2 md:gap-4">
+            <a href="#" onclick="loadPage('chat')" class="md:hidden text-lg text-accent p-2 rounded-lg hover:bg-secondary transition-all active:scale-95" data-role="user admin" id="mobile-chat-btn" style="display: none;">
+                <i class="fas fa-comments"></i>
+            </a>
+
             <button class="btn-primary px-3 py-1.5 md:px-5 md:py-2 rounded-lg font-medium flex items-center gap-1 md:gap-2 hover-lift" onclick="loadPage('account')" id="headerUserBtn">
                 <i class="fas fa-user icon-spin-hover"></i>
                 <span class="hidden md:inline" id="headerUserName">الحساب</span>
@@ -102,7 +106,7 @@
         <div class="flex-1 overflow-y-auto py-4 px-3 custom-scrollbar">
             <div class="space-y-1">
 
-                <a href="#" class="flex items-center gap-3 p-3 rounded-xl hover:bg-[var(--bg-card)] transition-all duration-300 group" onclick="handleMobileNav('home')">
+                <a href="javascript:void(0)" class="flex items-center gap-3 p-3 rounded-xl hover:bg-[var(--bg-card)] transition-all duration-300 group" onclick="handleMobileNav('home')">
                     <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-sky-500/20 to-teal-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
                         <i class="fas fa-home text-sky-400"></i>
                     </div>
@@ -110,7 +114,7 @@
                     <i class="fas fa-chevron-left mr-auto text-gray-500 group-hover:text-sky-400 transition-colors text-sm"></i>
                 </a>
                 
-                <a href="#" class="flex items-center gap-3 p-3 rounded-xl hover:bg-[var(--bg-card)] transition-all duration-300 group" onclick="handleMobileNav('news')">
+                <a href="javascript:void(0)" class="flex items-center gap-3 p-3 rounded-xl hover:bg-[var(--bg-card)] transition-all duration-300 group" onclick="handleMobileNav('news')">
                     <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-sky-500/20 to-teal-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
                         <i class="fas fa-newspaper text-teal-400"></i>
                     </div>
@@ -118,7 +122,7 @@
                     <i class="fas fa-chevron-left mr-auto text-gray-500 group-hover:text-teal-400 transition-colors text-sm"></i>
                 </a>
                 
-                <a href="#" class="flex items-center gap-3 p-3 rounded-xl hover:bg-[var(--bg-card)] transition-all duration-300 group" onclick="handleMobileNav('events')">
+                <a href="javascript:void(0)" class="flex items-center gap-3 p-3 rounded-xl hover:bg-[var(--bg-card)] transition-all duration-300 group" onclick="handleMobileNav('events')">
                     <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-sky-500/20 to-teal-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
                         <i class="fas fa-calendar-alt text-sky-400"></i>
                     </div>
@@ -126,7 +130,7 @@
                     <i class="fas fa-chevron-left mr-auto text-gray-500 group-hover:text-sky-400 transition-colors text-sm"></i>
                 </a>
 
-                <a href="#" class="flex items-center gap-3 p-3 rounded-xl hover:bg-[var(--bg-card)] transition-all duration-300 group" onclick="handleMobileNav('userSearch')">
+                <a href="javascript:void(0)" class="flex items-center gap-3 p-3 rounded-xl hover:bg-[var(--bg-card)] transition-all duration-300 group" onclick="handleMobileNav('userSearch')">
                     <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-sky-500/20 to-teal-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
                         <i class="fas fa-search text-teal-400"></i>
                     </div>
@@ -134,7 +138,7 @@
                     <i class="fas fa-chevron-left mr-auto text-gray-500 group-hover:text-teal-400 transition-colors text-sm"></i>
                 </a>
                 
-                <a href="#" class="flex items-center gap-3 p-3 rounded-xl hover:bg-[var(--bg-card)] transition-all duration-300 group" onclick="handleMobileNav('quizGame')">
+                <a href="javascript:void(0)" class="flex items-center gap-3 p-3 rounded-xl hover:bg-[var(--bg-card)] transition-all duration-300 group" onclick="handleMobileNav('quizGame')">
                     <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-sky-500/20 to-teal-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
                         <i class="fas fa-gamepad text-sky-400"></i>
                     </div>
@@ -142,9 +146,9 @@
                     <i class="fas fa-chevron-left mr-auto text-gray-500 group-hover:text-sky-400 transition-colors text-sm"></i>
                 </a>
 
-                <div class="my-3 border-t border-[var(--border-light)]"></div>
+                <div class="my-3 border-t border-[var(--border-light)] hidden-by-role" data-role="user admin"></div>
                 
-                <a href="#" class="flex items-center gap-3 p-3 rounded-xl hover:bg-[var(--bg-card)] transition-all duration-300 group user-only" style="display: none;" onclick="handleMobileNav('chat')">
+                <a href="javascript:void(0)" class="flex items-center gap-3 p-3 rounded-xl hover:bg-[var(--bg-card)] transition-all duration-300 group mobile-menu-link" style="display: none;" onclick="handleMobileNav('chat')" data-role="user admin">
                     <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-sky-500/20 to-teal-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
                         <i class="fas fa-comments text-teal-400"></i>
                     </div>
@@ -153,7 +157,7 @@
                     <i class="fas fa-chevron-left mr-auto text-gray-500 group-hover:text-teal-400 transition-colors text-sm"></i>
                 </a>
                 
-                <a href="#" class="flex items-center gap-3 p-3 rounded-xl hover:bg-[var(--bg-card)] transition-all duration-300 group user-only" style="display: none;" onclick="handleMobileNav('contact')">
+                <a href="javascript:void(0)" class="flex items-center gap-3 p-3 rounded-xl hover:bg-[var(--bg-card)] transition-all duration-300 group mobile-menu-link" style="display: none;" onclick="handleMobileNav('contact')" data-role="user guest">
                     <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-sky-500/20 to-teal-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
                         <i class="fas fa-envelope text-sky-400"></i>
                     </div>
@@ -161,9 +165,9 @@
                     <i class="fas fa-chevron-left mr-auto text-gray-500 group-hover:text-sky-400 transition-colors text-sm"></i>
                 </a>
 
-                <div class="my-3 border-t border-[var(--border-light)] user-only" style="display: none;"></div>
+                <div class="my-3 border-t border-[var(--border-light)] hidden-by-role" data-role="admin"></div>
                 
-                <a href="#" class="flex items-center gap-3 p-3 rounded-xl hover:bg-[var(--bg-card)] transition-all duration-300 group admin-only" style="display: none;" onclick="handleMobileNav('adminPanel')">
+                <a href="javascript:void(0)" class="flex items-center gap-3 p-3 rounded-xl hover:bg-[var(--bg-card)] transition-all duration-300 group mobile-menu-link" style="display: none;" onclick="handleMobileNav('adminPanel')" data-role="admin">
                     <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
                         <i class="fas fa-user-shield text-purple-400"></i>
                     </div>
@@ -245,6 +249,6 @@
     <p class="font-mono text-sm">ملتقى شباب التميز - ٢٠٢٦</p>
 </footer>
 
-<script src="app.js"></script>
+<script src="/app.js"></script>
 </body>
 </html>

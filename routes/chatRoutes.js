@@ -5,6 +5,7 @@ const User = require('../models/User');
 const Group = require('../models/Group');
 const jwt = require('jsonwebtoken');
 const checkSuspension = require('../middleware/checkSuspension');
+const upload = require('../utils/multer');
 
 
 // Auth middleware
@@ -122,22 +123,27 @@ router.get('/messages/:userId', protect, async (req, res) => {
 });
 
 // Send a message
-router.post('/send', protect, checkSuspension, async (req, res) => {
+router.post('/send', protect, checkSuspension, upload.single('image'), async (req, res) => {
     try {
         const { receiverId, content } = req.body;
-        if (!receiverId || !content || !content.trim()) {
-            return res.status(400).json({ message: 'Receiver and content required' });
+        const imageUrl = req.file ? req.file.path : null;
+
+        if (!receiverId || (!content && !imageUrl)) {
+            return res.status(400).json({ message: 'Receiver and content or image required' });
         }
 
         const receiver = await User.findById(receiverId);
         if (!receiver) return res.status(404).json({ message: 'User not found' });
 
-        const message = new Message({
+        const messageData = {
             sender: req.user._id,
-            receiver: receiverId,
-            content: content.trim()
-        });
+            receiver: receiverId
+        };
+        
+        if (content) messageData.content = content.trim();
+        if (imageUrl) messageData.imageUrl = imageUrl;
 
+        const message = new Message(messageData);
         await message.save();
         res.status(201).json(message);
     } catch (error) {
