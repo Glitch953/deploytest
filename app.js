@@ -1030,6 +1030,69 @@ async function loadProfileData() {
     if (privacyToggle && user.privacySettings) {
         privacyToggle.checked = user.privacySettings.showFollowers !== false;
     }
+
+    // Fetch and render registrations
+    fetchUserRegistrations(user._id);
+}
+
+async function fetchUserRegistrations(userId) {
+    const coursesList = document.getElementById('user-courses-list');
+    const eventsList = document.getElementById('user-events-list');
+    const token = localStorage.getItem('token');
+
+    if (!coursesList || !eventsList) return;
+
+    try {
+        const response = await fetch(`${apiBaseUrl}/registrations/user/${userId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) throw new Error('Failed to fetch registrations');
+
+        const registrations = await response.json();
+
+        if (registrations.length === 0) {
+            const emptyMsg = '<div class="text-center py-6 text-gray-500">لا يوجد تسجيلات حالياً</div>';
+            coursesList.innerHTML = emptyMsg;
+            eventsList.innerHTML = emptyMsg;
+            return;
+        }
+
+        const statusBadges = {
+            'pending': '<span class="px-2 py-1 text-[10px] bg-yellow-500/10 text-yellow-500 rounded-full border border-yellow-500/20">قيد المراجعة</span>',
+            'approved': '<span class="px-2 py-1 text-[10px] bg-green-500/10 text-green-500 rounded-full border border-green-500/20">مقبول</span>',
+            'rejected': '<span class="px-2 py-1 text-[10px] bg-red-500/10 text-red-500 rounded-full border border-red-500/20">مرفوض</span>'
+        };
+
+        const renderReg = (reg) => `
+            <div class="flex items-center justify-between p-4 bg-[var(--bg-primary)] border border-[var(--border-light)] rounded-xl hover:border-sky-400/50 transition-all">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-sky-500/10 to-teal-500/10 flex items-center justify-center">
+                        <i class="fas ${reg.eventId?.type === 'courses' ? 'fa-graduation-cap text-teal-400' : 'fa-calendar-alt text-sky-400'}"></i>
+                    </div>
+                    <div>
+                        <h5 class="text-sm font-bold text-[var(--text-primary)]">${reg.eventName || (reg.eventId ? reg.eventId.title : 'فعالية')}</h5>
+                        <p class="text-[10px] text-gray-500">${new Date(reg.createdAt).toLocaleDateString('ar-JO')}</p>
+                    </div>
+                </div>
+                <div>
+                    ${statusBadges[reg.status] || reg.status}
+                </div>
+            </div>
+        `;
+
+        const courses = registrations.filter(r => r.eventId?.type === 'courses');
+        const events = registrations.filter(r => r.eventId?.type !== 'courses');
+
+        coursesList.innerHTML = courses.length > 0 ? courses.map(renderReg).join('') : '<div class="text-center py-4 text-gray-500 text-xs">لا يوجد كورسات مسجلة</div>';
+        eventsList.innerHTML = events.length > 0 ? events.map(renderReg).join('') : '<div class="text-center py-4 text-gray-500 text-xs">لا يوجد فعاليات مسجلة</div>';
+
+    } catch (error) {
+        console.error('Error loading registrations:', error);
+        const errorMsg = '<div class="text-center py-6 text-red-400">فشل تحميل التسجيلات</div>';
+        coursesList.innerHTML = errorMsg;
+        eventsList.innerHTML = errorMsg;
+    }
 }
 
 
@@ -2508,8 +2571,31 @@ async function openChat(id, username, userType, type = 'private') {
     const conversationsList = document.getElementById('conversationsList');
     if (conversationsList) conversationsList.classList.remove('hidden');
 
+    // On mobile, show the chat window and hide the list
+    toggleChatListView(false);
+
     loadConversations(false);
     loadMessages(id, true);
+}
+
+function toggleChatListView(showList) {
+    const listContainer = document.getElementById('chatListContainer');
+    const windowContainer = document.getElementById('chatWindowContainer');
+    if (!listContainer || !windowContainer) return;
+
+    if (window.innerWidth < 768) { // md breakpoint is 768px
+        if (showList) {
+            listContainer.classList.remove('hidden');
+            windowContainer.classList.add('hidden');
+        } else {
+            listContainer.classList.add('hidden');
+            windowContainer.classList.remove('hidden');
+        }
+    } else {
+        // Desktop: always show both
+        listContainer.classList.remove('hidden');
+        windowContainer.classList.remove('hidden');
+    }
 }
 
 async function loadMessages(id, scrollToBottom = false) {
@@ -2669,8 +2755,9 @@ async function sendChatMessage() {
             loadMessages(currentId, true);
             loadConversations(false);
         } else {
+            const data = await res.json().catch(() => ({}));
             document.getElementById(`temp-${tempId}`).remove();
-            showNotification('فشل الإرسال', 'error');
+            showNotification(data.message || 'فشل الإرسال', 'error');
             input.value = content;
         }
     } catch (error) {
@@ -7025,12 +7112,12 @@ account: `
                                  </div>
                              </div>
 
-                            <div class="flex gap-4 pt-4">
-                                <button type="submit" class="btn-gradient px-8 py-3">
+                            <div class="flex flex-col sm:flex-row gap-4 pt-4">
+                                <button type="submit" class="flex-1 btn-gradient px-8 py-3 rounded-xl transition-all duration-300">
                                     <i class="fas fa-save ml-2"></i>
                                     حفظ التغييرات
                                 </button>
-                                <button type="button" class="btn-outline px-8 py-3">
+                                <button type="button" onclick="loadProfileData()" class="flex-1 btn-outline px-8 py-3 rounded-xl hover:bg-white/5 transition-all duration-300">
                                     إلغاء
                                 </button>
                             </div>
@@ -7461,9 +7548,9 @@ chat:`<section class="pt-24 md:pt-32 pb-12 px-4 md:px-6 min-h-screen relative ov
             <p class="text-gray-400">تواصل مع أصدقائك وأعضاء الملتقى</p>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 h-[75vh] min-h-[600px] overflow-hidden">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 h-[75vh] min-h-[600px] overflow-hidden relative">
             <!-- قائمة المحادثات -->
-            <div class="md:col-span-1 h-full overflow-hidden">
+            <div id="chatListContainer" class="md:col-span-1 h-full overflow-hidden transition-all duration-300">
                 <div class="elegant-card overflow-hidden flex flex-col h-full">
                     <div class="p-4 border-b border-[var(--border-light)] space-y-3">
                         <div class="flex items-center justify-between">
@@ -7495,10 +7582,13 @@ chat:`<section class="pt-24 md:pt-32 pb-12 px-4 md:px-6 min-h-screen relative ov
             </div>
 
             <!-- نافذة المحادثة -->
-            <div class="md:col-span-2 h-full overflow-hidden">
-                <div class="elegant-card flex flex-col h-full overflow-hidden">
+            <div id="chatWindowContainer" class="hidden md:flex md:col-span-2 h-full overflow-hidden transition-all duration-300">
+                <div class="elegant-card flex flex-col h-full overflow-hidden w-full">
                     <!-- رأس المحادثة -->
                     <div id="chatHeader" class="p-4 border-b border-[var(--border-light)] flex items-center gap-3">
+                        <button onclick="toggleChatListView(true)" class="md:hidden w-8 h-8 rounded-lg bg-[var(--bg-primary)] flex items-center justify-center text-gray-400 hover:text-sky-400">
+                            <i class="fas fa-arrow-right"></i>
+                        </button>
                         <div class="relative">
                             <div class="w-10 h-10 rounded-full p-[2px] bg-gradient-to-br from-sky-500 to-teal-500">
                                 <div class="w-full h-full rounded-full bg-[var(--bg-primary)] flex items-center justify-center">
