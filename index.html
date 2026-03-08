@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ملتقى شباب التميز</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="/scripts/lang.js"></script>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body class="bg-gradient-to-b from-primary via-secondary to-primary">
+
+<nav class="navbar-glass fixed top-0 w-full py-1 md:py-2 px-3 md:px-6 z-50 animate-slideDown">
+    <div class="max-w-7xl mx-auto flex justify-between items-center">
+
+        <div class="flex items-center gap-3 group cursor-pointer" onclick="loadPage('home')">
+            <div class="text-xl md:text-2xl font-bold text-accent text-glow relative overflow-hidden">
+                <span class="relative z-10">EYF</span>
+                <span class="absolute inset-0 bg-accent/20 blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></span>
+            </div>
+            <span class="text-sm text-gray-400 hidden md:block relative">
+                ملتقى شباب التميز
+                <span class="absolute bottom-0 right-0 w-0 h-0.5 bg-accent group-hover:w-full transition-all duration-300"></span>
+            </span>
+        </div>
+
+        <div class="hidden md:flex items-center gap-1">
+            <a href="javascript:void(0)" class="nav-link group" onclick="loadPage('home')" data-role="user admin guest">
+                <i class="fas fa-home ml-1.5 nav-icon"></i>
+                <span class="nav-text">الرئيسية</span>
+                <span class="nav-indicator"></span>
+            </a>
+            <a href="javascript:void(0)" class="nav-link group" onclick="loadPage('news')" data-role="user admin guest">
+                <i class="fas fa-chart-line ml-1.5 nav-icon"></i>
+                <span class="nav-text">اخر الاخبار</span>
+                <span class="nav-indicator"></span>
+            </a>
+            <a href="javascript:void(0)" class="nav-link group" onclick="loadPage('events')" data-role="user admin guest">
+                <i class="fas fa-calendar-alt ml-1.5 nav-icon"></i>
+                <span class="nav-text">الفعاليات</span>
+                <span class="nav-indicator"></span>
+            </a>
+            <a href="javascript:void(0)" class="nav-link group" onclick="loadPage('userSearch')" data-role="user admin guest">
+                <i class="fas fa-search ml-1.5 nav-icon"></i>
+                <span class="nav-text">بحث</span>
+                <span class="nav-indicator"></span>
+            </a>
+            <a href="javascript:void(0)" class="nav-link group" onclick="loadPage('quizGame')" data-role="user admin">
+                <i class="fas fa-gamepad ml-1.5 nav-icon"></i>
+                <span class="nav-text">لعبة الأسئلة</span>
+                <span class="nav-indicator"></span>
+            </a>
+            <a href="javascript:void(0)" class="nav-link user-only" style="display: none;" onclick="loadPage('chat')" data-role="user admin">
+                <i class="fas fa-comments ml-1.5 nav-icon"></i>
+                <span class="nav-text">المحادثات</span>
+                <span class="nav-indicator"></span>
+                <span id="navUnreadBadge" class="unread-badge hidden"></span>
+            </a>
+            <a href="javascript:void(0)" class="nav-link user-only" style="display: none;" onclick="loadPage('contact')" data-role="user guest">
+                <i class="fas fa-envelope ml-1.5 nav-icon"></i>
+                <span class="nav-text">اتصل بنا</span>
+                <span class="nav-indicator"></span>
+            </a>
+            <a href="javascript:void(0)" class="nav-link admin-only" style="display: none;" onclick="loadPage('adminPanel')" data-role="admin">
+                <i class="fas fa-user-shield ml-1.5 nav-icon"></i>
+                <span class="nav-text">صفحة التحكم</span>
+                <span class="nav-indicator"></span>
+            </a>
+        </div>
+
+        <div class="flex items-center gap-2 md:gap-4">
+            <a href="#" onclick="loadPage('chat')" class="md:hidden text-lg text-accent p-2 rounded-lg hover:bg-secondary transition-all active:scale-95" data-role="user admin" id="mobile-chat-btn" style="display: none;">
+                <i class="fas fa-comments"></i>
+            </a>
+
+            <button class="btn-primary px-3 py-1.5 md:px-5 md:py-2 rounded-lg font-medium flex items-center gap-1 md:gap-2 hover-lift" onclick="loadPage('account')" id="headerUserBtn">
+                <i class="fas fa-user icon-spin-hover"></i>
+                <span class="hidden md:inline" id="headerUserName">الحساب</span>
+            </button>
+
+            <button onclick="toggleMobileMenu()" class="md:hidden text-xl text-accent p-2 rounded-lg hover:bg-secondary transition-all active:scale-95 menu-toggle-btn">
+                <i class="fas fa-bars" id="menu-icon"></i>
+            </button>
+        </div>
+    </div>
+</nav>
+
+<div id="mobile-menu" class="fixed inset-0 z-[60] md:hidden">
+
+    <div class="mobile-menu-overlay absolute inset-0 bg-black/60 backdrop-blur-md" onclick="toggleMobileMenu()"></div>
+    
+    <div class="mobile-menu-panel absolute top-0 left-0 h-full w-80 elegant-card border-l border-[var(--border-light)] flex flex-col transform -translate-x-full transition-transform duration-500 ease-out rounded-none">
+        
+        <div class="p-6 flex justify-between items-center border-b border-[var(--border-light)]">
+            <div class="flex items-center gap-3">
+                <div class="text-2xl font-bold relative">
+                    <span class="gradient-text">EYF</span>
+                </div>
+            </div>
+            <button onclick="toggleMobileMenu()" class="w-10 h-10 rounded-lg bg-[var(--bg-primary)] hover:bg-red-500/20 hover:text-red-400 transition-all duration-300 flex items-center justify-center group">
+                <i class="fas fa-times text-gray-400 group-hover:text-red-400"></i>
+            </button>
+        </div>
+
+        <div class="flex-1 overflow-y-auto py-4 px-3 custom-scrollbar">
+            <div class="space-y-1">
+
+                <a href="javascript:void(0)" class="flex items-center gap-3 p-3 rounded-xl hover:bg-[var(--bg-card)] transition-all duration-300 group" onclick="handleMobileNav('home')">
+                    <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-sky-500/20 to-teal-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <i class="fas fa-home text-sky-400"></i>
+                    </div>
+                    <span class="text-[var(--text-primary)] group-hover:text-sky-400 transition-colors">الرئيسية</span>
+                    <i class="fas fa-chevron-left mr-auto text-gray-500 group-hover:text-sky-400 transition-colors text-sm"></i>
+                </a>
+                
+                <a href="javascript:void(0)" class="flex items-center gap-3 p-3 rounded-xl hover:bg-[var(--bg-card)] transition-all duration-300 group" onclick="handleMobileNav('news')">
+                    <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-sky-500/20 to-teal-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <i class="fas fa-newspaper text-teal-400"></i>
+                    </div>
+                    <span class="text-[var(--text-primary)] group-hover:text-teal-400 transition-colors">اخر الأخبار</span>
+                    <i class="fas fa-chevron-left mr-auto text-gray-500 group-hover:text-teal-400 transition-colors text-sm"></i>
+                </a>
+                
+                <a href="javascript:void(0)" class="flex items-center gap-3 p-3 rounded-xl hover:bg-[var(--bg-card)] transition-all duration-300 group" onclick="handleMobileNav('events')">
+                    <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-sky-500/20 to-teal-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <i class="fas fa-calendar-alt text-sky-400"></i>
+                    </div>
+                    <span class="text-[var(--text-primary)] group-hover:text-sky-400 transition-colors">الفعاليات</span>
+                    <i class="fas fa-chevron-left mr-auto text-gray-500 group-hover:text-sky-400 transition-colors text-sm"></i>
+                </a>
+
+                <a href="javascript:void(0)" class="flex items-center gap-3 p-3 rounded-xl hover:bg-[var(--bg-card)] transition-all duration-300 group" onclick="handleMobileNav('userSearch')">
+                    <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-sky-500/20 to-teal-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <i class="fas fa-search text-teal-400"></i>
+                    </div>
+                    <span class="text-[var(--text-primary)] group-hover:text-teal-400 transition-colors">بحث عن مستخدم</span>
+                    <i class="fas fa-chevron-left mr-auto text-gray-500 group-hover:text-teal-400 transition-colors text-sm"></i>
+                </a>
+                
+                <a href="javascript:void(0)" class="flex items-center gap-3 p-3 rounded-xl hover:bg-[var(--bg-card)] transition-all duration-300 group" onclick="handleMobileNav('quizGame')">
+                    <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-sky-500/20 to-teal-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <i class="fas fa-gamepad text-sky-400"></i>
+                    </div>
+                    <span class="text-[var(--text-primary)] group-hover:text-sky-400 transition-colors">لعبة الأسئلة</span>
+                    <i class="fas fa-chevron-left mr-auto text-gray-500 group-hover:text-sky-400 transition-colors text-sm"></i>
+                </a>
+
+                <div class="my-3 border-t border-[var(--border-light)] hidden-by-role" data-role="user admin"></div>
+                
+                <a href="javascript:void(0)" class="flex items-center gap-3 p-3 rounded-xl hover:bg-[var(--bg-card)] transition-all duration-300 group mobile-menu-link" style="display: none;" onclick="handleMobileNav('chat')" data-role="user admin">
+                    <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-sky-500/20 to-teal-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <i class="fas fa-comments text-teal-400"></i>
+                    </div>
+                    <span class="text-[var(--text-primary)] group-hover:text-teal-400 transition-colors">المحادثات</span>
+                    <span class="bg-gradient-to-r from-sky-500 to-teal-500 text-white text-[8px] px-2 py-1 rounded-full mr-2">جديد</span>
+                    <i class="fas fa-chevron-left mr-auto text-gray-500 group-hover:text-teal-400 transition-colors text-sm"></i>
+                </a>
+                
+                <a href="javascript:void(0)" class="flex items-center gap-3 p-3 rounded-xl hover:bg-[var(--bg-card)] transition-all duration-300 group mobile-menu-link" style="display: none;" onclick="handleMobileNav('contact')" data-role="user guest">
+                    <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-sky-500/20 to-teal-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <i class="fas fa-envelope text-sky-400"></i>
+                    </div>
+                    <span class="text-[var(--text-primary)] group-hover:text-sky-400 transition-colors">اتصل بنا</span>
+                    <i class="fas fa-chevron-left mr-auto text-gray-500 group-hover:text-sky-400 transition-colors text-sm"></i>
+                </a>
+
+                <div class="my-3 border-t border-[var(--border-light)] hidden-by-role" data-role="admin"></div>
+                
+                <a href="javascript:void(0)" class="flex items-center gap-3 p-3 rounded-xl hover:bg-[var(--bg-card)] transition-all duration-300 group mobile-menu-link" style="display: none;" onclick="handleMobileNav('adminPanel')" data-role="admin">
+                    <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <i class="fas fa-user-shield text-purple-400"></i>
+                    </div>
+                    <span class="text-purple-400 font-bold group-hover:text-purple-300 transition-colors">لوحة التحكم</span>
+                    <i class="fas fa-chevron-left mr-auto text-gray-500 group-hover:text-purple-400 transition-colors text-sm"></i>
+                </a>
+            </div>
+        </div>
+
+        <div class="p-6 border-t border-[var(--border-light)]">
+            <button onclick="handleMobileNav('account')" class="w-full btn-gradient py-3 flex items-center justify-center gap-2 group">
+                <i class="fas fa-user-circle text-lg group-hover:scale-110 transition-transform"></i>
+                <span>حسابي</span>
+            </button>
+            
+            <div class="flex justify-center gap-3 mt-4">
+                <a href="#" class="w-10 h-10 rounded-lg bg-[var(--bg-primary)] hover:bg-sky-400/20 hover:text-sky-400 transition-all duration-300 flex items-center justify-center text-gray-400">
+                    <i class="fab fa-facebook-f"></i>
+                </a>
+                <a href="#" class="w-10 h-10 rounded-lg bg-[var(--bg-primary)] hover:bg-pink-400/20 hover:text-pink-400 transition-all duration-300 flex items-center justify-center text-gray-400">
+                    <i class="fab fa-instagram"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="stars" id="stars"></div>
+<div class="mosque-silhouette"></div>
+
+<div class="content-wrapper">
+
+<div id="content"></div>
+
+<div id="notification-container"></div>
+
+<div id="followersModal" class="fixed inset-0 bg-black/60 hidden items-center justify-center z-[60] backdrop-blur-md">
+    <div class="relative max-w-md w-full m-4">
+        <div class="absolute -inset-1 bg-gradient-to-r from-sky-500 to-teal-500 rounded-2xl blur opacity-30"></div>
+        
+        <div class="relative elegant-card p-6">
+
+            <div class="flex justify-between items-center mb-6">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-sky-500/20 to-teal-500/20 flex items-center justify-center">
+                        <i class="fas fa-users text-sky-400"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-[var(--text-primary)]" id="followersModalTitle">المتابعون</h3>
+                </div>
+                <button onclick="closeFollowersModal()" 
+                    class="w-10 h-10 rounded-lg bg-[var(--bg-primary)] hover:bg-red-500/20 hover:text-red-400 transition-all duration-300 flex items-center justify-center group">
+                    <i class="fas fa-times text-gray-400 group-hover:text-red-400"></i>
+                </button>
+            </div>
+
+            <div id="followersList" class="space-y-3 max-h-[60vh] overflow-y-auto custom-scrollbar pr-1">
+                <div class="flex flex-col items-center justify-center py-12">
+                    <div class="relative mb-4">
+                        <div class="w-16 h-16 border-4 border-sky-400/20 border-t-sky-400 rounded-full animate-spin"></div>
+                        <div class="absolute inset-0 flex items-center justify-center">
+                            <i class="fas fa-users text-2xl text-sky-400"></i>
+                        </div>
+                    </div>
+                    <p class="text-gray-400 text-sm">جاري التحميل...</p>
+                </div>
+            </div>
+
+            <div class="absolute -bottom-2 -left-2 w-12 h-12 bg-gradient-to-br from-sky-500/20 to-teal-500/20 rounded-full blur-xl"></div>
+        </div>
+    </div>
+</div>
+
+<footer id="footer" class="text-center mt-20 space-y-4 hidden">
+    <div class="flex justify-center gap-2 mb-4">
+        <hr class="w-24 border-sky-400/30">
+        <i class="fas fa-users text-sky-400"></i>
+        <hr class="w-24 border-teal-400/30">
+    </div>
+    <p class="font-mono text-sm">ملتقى شباب التميز - ٢٠٢٦</p>
+</footer>
+
+<script src="/app.js"></script>
+</body>
+</html>
