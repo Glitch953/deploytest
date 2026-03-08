@@ -16,14 +16,6 @@ app.use(helmet({
 }));
 app.use(mongoSanitize());
 
-// Rate Limiting (100 requests per 15 mins for all /api routes)
-const apiLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 1000,
-    message: { message: 'تم تجاوز الحد الأقصى للطلبات، يرجى المحاولة لاحقاً.' }
-});
-app.use('/api/', apiLimiter);
-
 // General Middleware
 app.use(express.json());
 app.use(cors());
