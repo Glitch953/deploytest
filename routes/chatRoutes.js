@@ -204,28 +204,34 @@ router.post('/groups', protect, checkSuspension, async (req, res) => {
 });
 
 // Send a message to a group
-router.post('/send-group', protect, checkSuspension, async (req, res) => {
+router.post('/send-group', protect, checkSuspension, upload.single('image'), async (req, res) => {
     try {
         const { groupId, content } = req.body;
-        if (!groupId || !content || !content.trim()) {
-            return res.status(400).json({ message: 'Group and content required' });
+        const imageUrl = req.file ? req.file.path : null;
+
+        if (!groupId || (!content && !imageUrl)) {
+            return res.status(400).json({ message: 'Group and content or image required' });
         }
 
         const group = await Group.findById(groupId);
         if (!group) return res.status(404).json({ message: 'Group not found' });
 
-        const message = new Message({
+        const messageData = {
             sender: req.user._id,
-            groupId: groupId,
-            content: content.trim()
-        });
+            groupId: groupId
+        };
 
+        if (content) messageData.content = content.trim();
+        if (imageUrl) messageData.imageUrl = imageUrl;
+
+        const message = new Message(messageData);
         await message.save();
 
-        // Populate sender for frontend
-        const populated = await Message.findById(message._id).populate('sender', 'username profilePhoto userType');
+        const populated = await Message.findById(message._id)
+            .populate('sender', 'username profilePhoto userType');
 
         res.status(201).json(populated);
+
     } catch (error) {
         console.error('Send group message error:', error);
         res.status(500).json({ message: 'Server error' });

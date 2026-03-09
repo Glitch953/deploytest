@@ -12,6 +12,25 @@ function getTypeArabic(type) {
     };
     return types[type] || 'فعالية';
 }
+function getStatusBadgeClass(status) {
+    const classes = {
+        'pending': 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30',
+        'approved': 'bg-green-500/20 text-green-400 border border-green-500/30',
+        'rejected': 'bg-red-500/20 text-red-400 border border-red-500/30',
+        'waitlist': 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+    };
+    return classes[status] || classes.pending;
+}
+
+        function getStatusText(status) {
+            const texts = {
+                'pending': 'قيد الانتظار',
+                'approved': 'مقبول',
+                'rejected': 'مرفوض',
+                'waitlist': 'قائمة انتظار'
+            };
+            return texts[status] || status;
+        }
 
 document.addEventListener('DOMContentLoaded', async () => {
 
@@ -77,20 +96,6 @@ async function loadCurrentUser() {
     }
 
     return await response.json();
-}
-
-function getSafeUser() {
-    try {
-        const userStr = localStorage.getItem('user');
-        if (!userStr) return null;
-        const user = JSON.parse(userStr);
-        if (user && user.id && !user._id) user._id = user.id;
-        if (user && user._id && !user.id) user.id = user._id;
-        return user;
-    } catch (e) {
-        console.error('Error parsing user data:', e);
-        return null;
-    }
 }
 
 (function() {
@@ -1589,7 +1594,7 @@ const EventsController = {
 
             // Fetch user registrations to check if already registered
             state.myRegistrations = [];
-            const user = getSafeUser();
+            const user = await loadCurrentUser();
             if (user && user._id) {
                 try {
                     const token = localStorage.getItem('token');
@@ -2746,7 +2751,7 @@ async function sendChatMessage() {
 
         const res = await fetch(url, {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}` }, // Do not set Content-Type here, let browser set boundary for FormData
+            headers: { 'Authorization': `Bearer ${token}` },
             body: formData
         });
 
@@ -3384,7 +3389,7 @@ async function renderGamePlay(data) {
              quizAutoAdvanceDoneForIndex = data.currentQuestion;
              setTimeout(() => {
                  if (quizRoomCode) goToNextQuestion();
-             }, 1000); // Reduced delay to 1 second
+             }, 1000);
          }
     }
 
@@ -3546,6 +3551,7 @@ async function renderLiveScores(players) {
     const currentUser = await loadCurrentUser();
     const userId = currentUser?._id || currentUser?.id; 
     const sorted = [...players].sort((a, b) => (b.score || 0) - (a.score || 0));
+    document.getElementById('liveScoreCon')?.classList.remove('hidden');
 
     container.innerHTML = sorted.map(p => `
         <div class="flex items-center gap-2 bg-[var(--bg-primary)] px-3 py-2 rounded-xl border border-[var(--border-light)] hover:border-sky-400/30 transition-all duration-300 group">
@@ -3579,6 +3585,7 @@ function renderResults(data) {
     document.getElementById('quizWaitingRoom')?.classList.add('hidden');
     document.getElementById('quizGamePlay')?.classList.add('hidden');
     document.getElementById('quizResults')?.classList.remove('hidden');
+    document.getElementById('liveScoreCon')?.classList.add('hidden');
 
     const codeEl = document.getElementById('resultRoomCode');
     if (codeEl) codeEl.textContent = quizRoomCode;
@@ -3929,6 +3936,18 @@ async function loadCertificates() {
 
         const certificates = await res.json();
         targetContainer.innerHTML = ''; 
+
+        if (certificates.length === 0) {
+            container.innerHTML = `
+                <div class="col-span-1 md:col-span-2 py-12 text-center text-gray-500">
+                    <div class="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-gray-700 to-gray-600 rounded-2xl flex items-center justify-center opacity-50">
+                        <i class="fas fa-certificate text-white text-2xl"></i>
+                    </div>
+                    <p>لا تمتلك أي شهادات حتى الآن.</p>
+                </div>
+            `;
+            return;
+        }
 
         certificates.forEach(cert => {
             stats.total++;
@@ -4558,7 +4577,6 @@ async function loadEvents() {
                 console.log('❌ عنصر events-list-container غير موجود');
                 return;
             }
-
             // عرض مؤشر التحميل
             container.innerHTML = `
         <div class="text-center text-gray-400 py-8">
@@ -4711,48 +4729,59 @@ async function loadEvents() {
             modal.id = 'registrationsModal';
             modal.className = 'fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50';
             modal.innerHTML = `
-        <div class="bg-secondary rounded-xl p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div class="flex justify-between items-center mb-6 sticky top-0 bg-secondary pb-4 border-b border-gray-700">
-                <div>
-                    <h3 class="text-xl font-bold text-white">
-                        <i class="fas fa-users text-accent ml-2"></i>
-                        المسجلين في: <span id="modalEventTitle" class="text-accent"></span>
-                    </h3>
-                    <div id="seatsInfo" class="text-sm text-gray-400 mt-1"></div>
-                </div>
-                <button onclick="closeRegistrationsModal()" class="text-gray-400 hover:text-white">
-                    <i class="fas fa-times text-xl"></i>
-                </button>
-            </div>
-            
-            <!-- إحصائيات سريعة -->
-            <div class="grid grid-cols-4 gap-4 mb-6">
-                <div class="bg-primary p-4 rounded-lg text-center">
-                    <div class="text-2xl font-bold text-white" id="totalCount">0</div>
-                    <div class="text-xs text-gray-400">إجمالي</div>
-                </div>
-                <div class="bg-primary p-4 rounded-lg text-center">
-                    <div class="text-2xl font-bold text-yellow-400" id="pendingCount">0</div>
-                    <div class="text-xs text-gray-400">قيد الانتظار</div>
-                </div>
-                <div class="bg-primary p-4 rounded-lg text-center">
-                    <div class="text-2xl font-bold text-green-400" id="approvedCount">0</div>
-                    <div class="text-xs text-gray-400">مقبول</div>
-                </div>
-                <div class="bg-primary p-4 rounded-lg text-center">
-                    <div class="text-2xl font-bold text-red-400" id="rejectedCount">0</div>
-                    <div class="text-xs text-gray-400">مرفوض</div>
-                </div>
-            </div>
-            
-            <!-- قائمة المسجلين -->
-            <div id="registrationsList" class="space-y-3">
-                <div class="text-center text-gray-400 py-8">
-                    <i class="fas fa-spinner fa-spin text-accent text-2xl mb-2"></i>
-                    <p>جاري تحميل المسجلين...</p>
-                </div>
+<div class="elegant-card max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto relative">
+    <!-- رأس المودال (ثابت) -->
+    <div class="sticky top-0 bg-[var(--bg-card)] backdrop-blur-md z-10 px-6 py-4 border-b border-[var(--border-light)] flex justify-between items-center">
+        <div>
+            <h3 class="text-xl font-bold text-[var(--text-primary)] flex items-center gap-2">
+                <i class="fas fa-users text-sky-400"></i>
+                المسجلين في: <span id="modalEventTitle" class="gradient-text"></span>
+            </h3>
+            <div id="seatsInfo" class="text-sm text-gray-400 mt-1 flex items-center gap-1">
+                <i class="fas fa-chair text-teal-400 text-xs"></i>
+                <span></span>
             </div>
         </div>
+        <button onclick="closeRegistrationsModal()" class="w-10 h-10 rounded-lg bg-[var(--bg-primary)] hover:bg-red-500/20 hover:text-red-400 transition-all duration-300 flex items-center justify-center group">
+            <i class="fas fa-times text-gray-400 group-hover:text-red-400"></i>
+        </button>
+    </div> 
+    
+    <div class="p-6">
+        <!-- إحصائيات سريعة -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div class="stat-card p-4 text-center">
+                <div class="text-2xl font-bold gradient-text" id="totalCount">0</div>
+                <div class="text-xs text-gray-400">إجمالي المسجلين</div>
+            </div>
+            <div class="stat-card p-4 text-center">
+                <div class="text-2xl font-bold text-amber-400" id="pendingCount">0</div>
+                <div class="text-xs text-gray-400">قيد الانتظار</div>
+            </div>
+            <div class="stat-card p-4 text-center">
+                <div class="text-2xl font-bold text-green-400" id="approvedCount">0</div>
+                <div class="text-xs text-gray-400">تم القبول</div>
+            </div>
+            <div class="stat-card p-4 text-center">
+                <div class="text-2xl font-bold text-red-400" id="rejectedCount">0</div>
+                <div class="text-xs text-gray-400">مرفوض</div>
+            </div>
+        </div>
+        
+        <!-- قائمة المسجلين -->
+        <div id="registrationsList" class="space-y-3 max-h-[50vh] overflow-y-auto custom-scrollbar pr-1">
+            <div class="flex flex-col items-center justify-center py-12">
+                <div class="relative mb-4">
+                    <div class="w-16 h-16 border-4 border-sky-400/20 border-t-sky-400 rounded-full animate-spin"></div>
+                    <div class="absolute inset-0 flex items-center justify-center">
+                        <i class="fas fa-users text-2xl text-sky-400"></i>
+                    </div>
+                </div>
+                <p class="text-gray-400 text-sm">جاري تحميل المسجلين...</p>
+            </div>
+        </div>
+    </div>
+</div>
     `;
 
             // إغلاق المودال عند الضغط خارجه
@@ -4764,7 +4793,14 @@ async function loadEvents() {
 
             return modal;
         }
-
+        function closeRegistrationsModal() {
+            const modal = document.getElementById('registrationsModal');
+            if (modal) {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            }
+            currentEventId = null;
+        }
         async function loadEventRegistrations(eventId) {
             try {
                 const response = await fetch(`${apiBaseUrl}/registrations/event/${eventId}`);
@@ -4818,45 +4854,47 @@ async function loadEvents() {
                 regDiv.className = 'bg-primary p-4 rounded-lg flex flex-col md:flex-row md:items-center justify-between gap-4 border border-gray-700';
                 
                 regDiv.innerHTML = `
-                    <div class="flex items-start gap-3">
-                        <div class="w-10 h-10 bg-accent/20 rounded-full flex items-center justify-center">
-                            <i class="fas fa-user text-accent"></i>
-                        </div>
-                        <div>
-                            <h6 class="text-white font-medium reg-name-h"></h6>
-                            <p class="text-gray-400 text-sm reg-email-p"></p>
-                            <p class="text-gray-500 text-xs mt-1">
-                                <i class="fas fa-clock ml-1"></i>
-                                ${new Date(reg.registeredAt).toLocaleDateString('ar-JO')}
-                            </p>
-                        </div>
-                    </div>
-                    
-                    <div class="flex items-center gap-3">
-                        <span class="px-3 py-1 rounded-full text-xs ${getStatusBadgeClass(reg.status)}">
-                            ${getStatusText(reg.status)}
-                        </span>
-                        <div class="flex gap-2">
-                            ${reg.status !== 'approved' ? `
-                                <button class="bg-green-500/20 text-green-400 px-3 py-2 rounded-lg text-sm hover:bg-green-500 hover:text-white transition approve-btn"
-                                    title="قبول">
-                                    <i class="fas fa-check"></i>
-                                </button>
-                            ` : ''}
-                            
-                            ${reg.status !== 'rejected' ? `
-                                <button class="bg-red-500/20 text-red-400 px-3 py-2 rounded-lg text-sm hover:bg-red-500 hover:text-white transition reject-btn"
-                                    title="رفض">
-                                    <i class="fas fa-times"></i>
-                                </button>
-                            ` : ''}
+<div class="flex items-start gap-3 flex-1">
+    <div class="w-10 h-10 rounded-full p-[2px] bg-gradient-to-br from-sky-500 to-teal-500">
+        <div class="w-full h-full rounded-full bg-[var(--bg-primary)] flex items-center justify-center">
+            <i class="fas fa-user text-sky-400"></i>
+        </div>
+    </div>
+    <div>
+        <h6 class="text-[var(--text-primary)] font-medium reg-name-h"></h6>
+        <p class="text-gray-400 text-sm reg-email-p"></p>
+        <p class="text-gray-500 text-xs mt-1">
+            <i class="fas fa-clock ml-1 text-teal-400"></i>
+            ${new Date(reg.registeredAt).toLocaleDateString('ar-JO')}
+        </p>
+    </div>
+</div>
 
-                            <button class="bg-gray-500/10 text-gray-400 px-3 py-2 rounded-lg text-sm hover:bg-red-500 hover:text-white transition delete-btn"
-                                title="حذف التسجيل">
-                                <i class="fas fa-trash-alt"></i>
-                            </button>
-                        </div>
-                    </div>
+<div class="flex items-center gap-3">
+    <span class="px-3 py-1 rounded-full text-xs ${getStatusBadgeClass(reg.status)}">
+        ${getStatusText(reg.status)}
+    </span>
+    <div class="flex gap-2">
+        ${reg.status !== 'approved' ? `
+            <button class="bg-green-500/20 text-green-400 px-3 py-2 rounded-lg text-sm hover:bg-green-500 hover:text-white transition approve-btn"
+                title="قبول">
+                <i class="fas fa-check"></i>
+            </button>
+        ` : ''}
+        
+        ${reg.status !== 'rejected' ? `
+            <button class="bg-red-500/20 text-red-400 px-3 py-2 rounded-lg text-sm hover:bg-red-500 hover:text-white transition reject-btn"
+                title="رفض">
+                <i class="fas fa-times"></i>
+            </button>
+        ` : ''}
+
+        <button class="bg-gray-500/10 text-gray-400 px-3 py-2 rounded-lg text-sm hover:bg-red-500 hover:text-white transition delete-btn"
+            title="حذف التسجيل">
+            <i class="fas fa-trash-alt"></i>
+        </button>
+    </div>
+</div>
                 `;
                 regDiv.querySelector('.reg-name-h').textContent = reg.name;
                 regDiv.querySelector('.reg-email-p').textContent = reg.email;
@@ -4864,7 +4902,7 @@ async function loadEvents() {
                 if (regDiv.querySelector('.reject-btn')) regDiv.querySelector('.reject-btn').onclick = () => rejectRegistration(reg._id);
                 regDiv.querySelector('.delete-btn').onclick = () => deleteRegistrationByAdmin(reg._id);
                 container.appendChild(regDiv);
-            });
+            }); 
         }
 
         function updateStats(data) {
@@ -5100,7 +5138,7 @@ async function loadEvents() {
                 bgColor: document.getElementById('eventBgColor').value,
                 description: document.getElementById('eventDescription').value,
                 status: document.getElementById('eventStatus').checked
-            };
+            }; 
 
             // التحقق من الحقول المطلوبة
             if (!eventData.title || !eventData.instructor || !eventData.duration || !eventData.seats) {
@@ -5732,9 +5770,14 @@ async function loadUserCertificates() {
                              <option value="أصدقاء الملتقى" ${user.userType === 'أصدقاء الملتقى' ? 'selected' : ''}>أصدقاء الملتقى</option>
                              <option value="الرئيس" ${user.userType === 'الرئيس' ? 'selected' : ''}>الرئيس</option>
                          </select>
-                         ${user.role !== 'admin' ? `
-                             <button onclick="updateUserRole('${user._id}', 'admin')" class="border border-purple-500/30 text-purple-400 px-3 py-2 rounded-lg text-sm hover:bg-purple-500 hover:text-white transition" title="تعيين كمشرف">
+                         ${user.role === 'admin' ? `
+                             <button onclick="updateUserRole('${user._id}', 'admin')" class="border border-purple-500/30 text-purple-400 px-3 py-2 rounded-lg text-sm hover:bg-purple-500 hover:text-white transition" title="تعيين كمستخدم">
                                  <i class="fas fa-crown"></i>
+                             </button>
+                         ` : ''}
+                         ${user.role !== 'admin' ? `
+                            <button onclick="updateUserRole('${user._id}', 'user')" class="border border-yellow-500/30 text-yellow-400 px-3 py-2 rounded-lg text-sm hover:bg-yellow-500 hover:text-white transition" title="تعيين كمشرف">
+                                 <i class="fas fa-user"></i>
                              </button>
                          ` : ''}
                          <button onclick="suspendUser('${user._id}')" class="border border-red-500/30 text-red-500 px-3 py-2 rounded-lg text-sm hover:bg-red-500 hover:text-white transition" title="حظر">
@@ -7366,7 +7409,7 @@ account: `
                         </h3>
 
                         <!-- الكورسات التدريبية -->
-                        <div class="mb-8">
+                        <div class="mb-8 hidden">
                             <h4 class="text-lg font-bold mb-4 pb-2 border-b border-[var(--border-light)] flex items-center gap-2">
                                 <i class="fas fa-graduation-cap text-teal-400"></i>
                                 <span class="text-[var(--text-primary)]">الكورسات التدريبية</span>
@@ -7383,7 +7426,7 @@ account: `
                         <div>
                             <h4 class="text-lg font-bold mb-4 pb-2 border-b border-[var(--border-light)] flex items-center gap-2">
                                 <i class="fas fa-calendar-alt text-sky-400"></i>
-                                <span class="text-[var(--text-primary)]">الفعاليات وورش العمل</span>
+                                <span class="text-[var(--text-primary)]">تسجيلاتي</span>
                             </h4>
                             <div class="space-y-4" id="user-events-list">
                                 <div class="text-center text-gray-400 py-8">
@@ -7845,7 +7888,7 @@ quizGame: `
                 <!-- Live Scores -->
 
                 <!-- Live Scores -->
-                <div class="elegant-card p-5 mt-4">
+                <div id="liveScoreCon" class="elegant-card p-5 mt-4 hidden">
                     <h4 class="text-sm text-gray-400 mb-3 flex items-center gap-2">
                         <i class="fas fa-trophy text-yellow-400"></i>
                         النقاط الحالية
@@ -8318,6 +8361,33 @@ adminPanel: `
 
             <!-- العمود الأيسر - المحتوى -->
             <div class="lg:col-span-2">
+                <!-- ========== لوحة المعلومات الرئيسية ========== -->
+                <div id="dashboard-section" class="admin-section">
+                    <div class="elegant-card p-8 text-center min-h-[957px]">
+                        <!-- أيقونة ترحيب -->
+                        <div class="flex justify-center mb-3 ">
+                            <div class="w-20 h-20 rounded-full bg-gradient-to-br from-sky-500/20 to-teal-500/20 flex items-center justify-center">
+                                <i class="fas fa-crown text-4xl text-sky-400"></i>
+                            </div>
+                        </div>
+
+                        <!-- نص الترحيب -->
+                        <h2 class="text-3xl md:text-4xl font-bold text-[var(--text-primary)] mb-3">
+                            مرحباً بك في <span class="gradient-text">لوحة التحكم</span>
+                        </h2>
+
+                        <p class="text-gray-400 text-lg">
+                            يمكنك إدارة المحتوى من القائمة الجانبية
+                        </p>
+
+                        <!-- أيقونات بسيطة (زخرفية فقط) -->
+                        <div class="flex justify-center gap-4 mt-6">
+                            <i class="fas fa-circle text-[0.3rem] text-sky-400/40"></i>
+                            <i class="fas fa-circle text-[0.3rem] text-teal-400/40"></i>
+                            <i class="fas fa-circle text-[0.3rem] text-sky-400/40"></i>
+                        </div>
+                    </div>
+                </div>
                 <!-- ========== طلبات تفعيل الحسابات v2.1 ========== -->
                 <div id="pending-users-section" class="admin-section hidden">
                     <div class="elegant-card p-8">
@@ -8362,7 +8432,7 @@ adminPanel: `
                 </div>
 
                 <!-- ========== إدارة الفعاليات ========== -->
-                <div id="events-section-admin" class="admin-section">
+                <div id="events-section-admin" class="admin-section hidden">
 
                     <div class="elegant-card p-8">
                         <div class="flex justify-between items-center mb-6">
